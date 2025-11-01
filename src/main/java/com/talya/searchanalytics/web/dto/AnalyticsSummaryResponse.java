@@ -1,0 +1,31 @@
+// filepath: c:\Users\taly\search-analytics-service\src\main\java\com\talya\searchanalytics\web\dto\AnalyticsSummaryResponse.java
+package com.talya.searchanalytics.web.dto;
+
+import lombok.*;
+import java.util.List;
+
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
+public class AnalyticsSummaryResponse {
+    private long totalSearches;
+    private long totalAddToCart;
+    private long totalPurchases;
+    private Double totalRevenue;
+    private double conversionRate;
+    private List<TimePoint> timeSeries;
+    private List<TopQuery> topQueries;
+
+    @Data @NoArgsConstructor @AllArgsConstructor @Builder
+    public static class TimePoint {
+        private String date;
+        private int searches;
+        private int addToCart;
+        private int purchases;
+    }
+
+    @Data @NoArgsConstructor @AllArgsConstructor
+    public static class TopQuery {
+        private String term;
+        private long count;
+    }
+}
+
