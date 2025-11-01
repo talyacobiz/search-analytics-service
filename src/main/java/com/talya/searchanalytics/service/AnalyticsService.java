@@ -48,12 +48,18 @@ public class AnalyticsService {
         Double revenueChange = percentChange(prevRevenue, totalRevenue);
         Double convChange = percentChange(prevConv, conv);
 
+        // Aggregate time series data
         List<AnalyticsSummaryResponse.TimePoint> series = new ArrayList<>();
         LocalDate start = Instant.ofEpochMilli(fromMs).atZone(ZoneOffset.UTC).toLocalDate();
         LocalDate end = Instant.ofEpochMilli(toMs).atZone(ZoneOffset.UTC).toLocalDate();
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            long dayStartMs = d.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+            long dayEndMs = d.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() - 1;
+            int daySearches = (int) searchRepo.countByShopIdAndTimestampMsBetween(shopId, dayStartMs, dayEndMs);
+            int dayAddToCart = (int) cartRepo.countByShopIdAndTimestampMsBetween(shopId, dayStartMs, dayEndMs);
+            int dayPurchases = (int) purchaseRepo.countByShopIdAndTimestampMsBetween(shopId, dayStartMs, dayEndMs);
             series.add(AnalyticsSummaryResponse.TimePoint.builder()
-                    .date(d.toString()).searches(0).addToCart(0).purchases(0).build());
+                    .date(d.toString()).searches(daySearches).addToCart(dayAddToCart).purchases(dayPurchases).build());
         }
 
         List<Object[]> rows = searchRepo.topQueries(shopId, fromMs, toMs);
