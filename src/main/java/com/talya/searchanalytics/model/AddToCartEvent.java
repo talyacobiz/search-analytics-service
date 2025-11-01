@@ -30,4 +30,8 @@ public class AddToCartEvent {
 
     @Column(nullable=false)
     private Long timestampMs;
+
+    private Double price;
+
+    private String currency;
 }

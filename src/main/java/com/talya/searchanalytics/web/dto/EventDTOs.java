@@ -24,6 +24,8 @@ public class EventDTOs {
         private String productId;
         private String searchId;
         private Long timestampMs;
+        private String price; // changed from Double to String
+        private String currency; // new field for currency as text
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor @Builder

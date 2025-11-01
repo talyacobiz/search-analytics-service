@@ -50,6 +50,19 @@ public class EventController {
     @PostMapping("/add-to-cart")
     public ResponseEntity<?> recordAddToCart(@RequestBody AddToCartRequest req) {
         log.info("POST /api/v1/events/add-to-cart - payload: {}", req);
+        Double price = null;
+        String currency = null;
+        if (req.getPrice() != null) {
+            String[] parts = req.getPrice().trim().split(" ");
+            try {
+                price = Double.parseDouble(parts[0]);
+            } catch (Exception e) {
+                log.warn("Failed to parse price: {}", req.getPrice());
+            }
+            if (parts.length > 1) {
+                currency = parts[1];
+            }
+        }
         AddToCartEvent e = AddToCartEvent.builder()
                 .shopId(req.getShopId())
                 .customerId(req.getCustomerId())
@@ -57,6 +70,8 @@ public class EventController {
                 .productId(req.getProductId())
                 .searchId(req.getSearchId())
                 .timestampMs(req.getTimestampMs())
+                .price(price)
+                .currency(currency)
                 .build();
         return ResponseEntity.ok(cartRepo.save(e).getId());
     }
