@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/analytics")
 @CrossOrigin(
-        // עדיף להשתמש ב-originPatterns בשביל תתי-דומיין ופורטים
         originPatterns = {
                 "https://searchwithai.myshopify.com",
                 "http://localhost:*",

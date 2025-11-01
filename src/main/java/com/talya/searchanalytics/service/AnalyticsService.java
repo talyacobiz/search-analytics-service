@@ -30,6 +30,24 @@ public class AnalyticsService {
         if (totalRevenue == null) totalRevenue = 0d;
         double conv = (searches == 0) ? 0 : (purchases * 100.0 / searches);
 
+        // Calculate previous period
+        long periodMs = toMs - fromMs;
+        long prevFromMs = fromMs - periodMs;
+        long prevToMs = fromMs;
+        long prevSearches = searchRepo.countByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
+        long prevAddToCart = cartRepo.countByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
+        long prevPurchases = purchaseRepo.countByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
+        Double prevRevenue = purchaseRepo.sumTotalAmountByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
+        if (prevRevenue == null) prevRevenue = 0d;
+        double prevConv = (prevSearches == 0) ? 0 : (prevPurchases * 100.0 / prevSearches);
+
+        // Calculate percentage change
+        Double searchesChange = percentChange(prevSearches, searches);
+        Double addToCartChange = percentChange(prevAddToCart, addToCart);
+        Double purchasesChange = percentChange(prevPurchases, purchases);
+        Double revenueChange = percentChange(prevRevenue, totalRevenue);
+        Double convChange = percentChange(prevConv, conv);
+
         List<AnalyticsSummaryResponse.TimePoint> series = new ArrayList<>();
         LocalDate start = Instant.ofEpochMilli(fromMs).atZone(ZoneOffset.UTC).toLocalDate();
         LocalDate end = Instant.ofEpochMilli(toMs).atZone(ZoneOffset.UTC).toLocalDate();
@@ -54,7 +72,18 @@ public class AnalyticsService {
                 .conversionRate(Math.round(conv * 10.0)/10.0)
                 .timeSeries(series)
                 .topQueries(tq)
+                .searchesChangePercent(searchesChange)
+                .addToCartChangePercent(addToCartChange)
+                .purchasesChangePercent(purchasesChange)
+                .revenueChangePercent(revenueChange)
+                .conversionRateChangePercent(convChange)
                 .build();
+    }
+
+    private Double percentChange(double prev, double curr) {
+        if (prev == 0 && curr == 0) return 0.0;
+        if (prev == 0) return 100.0;
+        return Math.round(((curr - prev) / prev) * 1000.0) / 10.0;
     }
 
     public AnalyticsFullResponse full(String shopId, long fromMs, long toMs) {

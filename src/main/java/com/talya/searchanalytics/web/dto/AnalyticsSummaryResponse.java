@@ -13,6 +13,11 @@ public class AnalyticsSummaryResponse {
     private double conversionRate;
     private List<TimePoint> timeSeries;
     private List<TopQuery> topQueries;
+    private Double searchesChangePercent;
+    private Double addToCartChangePercent;
+    private Double purchasesChangePercent;
+    private Double revenueChangePercent;
+    private Double conversionRateChangePercent;
 
     @Data @NoArgsConstructor @AllArgsConstructor @Builder
     public static class TimePoint {
@@ -28,4 +33,3 @@ public class AnalyticsSummaryResponse {
         private long count;
     }
 }
-
