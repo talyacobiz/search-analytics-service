@@ -18,6 +18,10 @@ public class AnalyticsSummaryResponse {
     private Double purchasesChangePercent;
     private Double revenueChangePercent;
     private Double conversionRateChangePercent;
+    private Double totalAddToCartAmount;
+    private Double prevAddToCartAmount;
+    private Double addToCartAmountChangePercent;
+    private String currency;
 
     @Data @NoArgsConstructor @AllArgsConstructor @Builder
     public static class TimePoint {
@@ -25,6 +29,8 @@ public class AnalyticsSummaryResponse {
         private int searches;
         private int addToCart;
         private int purchases;
+        private Double addToCartAmount;
+        private String currency;
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor
