@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
+import java.util.List;
 
 @RestController
 @CrossOrigin(origins = "https://searchwithai.myshopify.com")
@@ -62,6 +63,19 @@ public class EventController {
             if (parts.length > 1) {
                 currency = parts[1];
             }
+        }
+        // Smart add-to-cart logic
+        List<SearchEvent> searches = searchRepo.findAllByShopIdAndSessionId(req.getShopId(), req.getSessionId());
+        boolean found = false;
+        for (SearchEvent search : searches) {
+            if (search.getProductIds() != null && search.getProductIds().contains(req.getProductId())) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            log.info("AddToCartEvent ignored: productId {} not found in any search results for session {}", req.getProductId(), req.getSessionId());
+            return ResponseEntity.noContent().build();
         }
         AddToCartEvent e = AddToCartEvent.builder()
                 .shopId(req.getShopId())
