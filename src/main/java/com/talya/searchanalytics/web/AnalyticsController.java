@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
+import javax.servlet.http.HttpServletResponse;
 
 @RestController
 @RequestMapping("/api/v1/analytics")
@@ -14,7 +15,8 @@ import org.springframework.web.bind.annotation.*;
         originPatterns = {
                 "https://searchwithai.myshopify.com",
                 "http://localhost:*",
-                "https://*.ngrok-free.app"
+                "https://*.ngrok-free.app",
+                "https://dashboard.searchaiengine.com"
         },
         allowedHeaders = {
                 "Content-Type",
@@ -46,6 +48,14 @@ public class AnalyticsController {
         return analyticsService.summary(shopId, fromMs, toMs);
     }
 
+    @RequestMapping(value = "/summary", method = RequestMethod.OPTIONS)
+    public void corsHeadersSummary(HttpServletResponse response) {
+        response.setHeader("Access-Control-Allow-Origin", "https://dashboard.searchaiengine.com");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        response.setStatus(HttpServletResponse.SC_OK);
+    }
+
     @GetMapping(value = "/full", produces = "application/json")
     public AnalyticsFullResponse full(
             @RequestParam(name = "shopId") String shopId,
@@ -55,4 +65,12 @@ public class AnalyticsController {
         log.info("GET /full - shopId: {}, fromMs: {}, toMs: {}", shopId, fromMs, toMs);
         return analyticsService.full(shopId, fromMs, toMs);
     }
-}
+
+    @RequestMapping(value = "/full", method = RequestMethod.OPTIONS)
+    public void corsHeadersFull(HttpServletResponse response) {
+        response.setHeader("Access-Control-Allow-Origin", "https://dashboard.searchaiengine.com");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        response.setStatus(HttpServletResponse.SC_OK);
+    }
+}       

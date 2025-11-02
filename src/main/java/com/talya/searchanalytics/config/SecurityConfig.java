@@ -20,8 +20,8 @@ public class SecurityConfig {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
         corsConfiguration.setAllowedOrigins(Arrays.asList(
                 "https://searchwithai.myshopify.com",
-                "https://searchwithai.myshopify.co",
-                "https://admin.shopify.com"
+                "https://admin.shopify.com",
+                "https://dashboard.searchaiengine.com"
         ));
         corsConfiguration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
         corsConfiguration.setAllowedHeaders(Arrays.asList("*"));
