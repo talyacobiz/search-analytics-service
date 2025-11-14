@@ -18,14 +18,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
-        corsConfiguration.setAllowedOrigins(Arrays.asList(
-                "https://searchwithai.myshopify.com",
-                "https://searchwithai.myshopify.co",
-                "https://admin.shopify.com"
-        ));
+        corsConfiguration.setAllowedOriginPatterns(Arrays.asList("*"));
         corsConfiguration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
         corsConfiguration.setAllowedHeaders(Arrays.asList("*"));
-        corsConfiguration.setAllowCredentials(true);
+        corsConfiguration.setAllowCredentials(false);
         corsConfiguration.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", corsConfiguration);
@@ -38,8 +34,8 @@ public class SecurityConfig {
                 .cors().and()
                 .csrf().disable()
                 .authorizeRequests()
-                .antMatchers("/actuator/health", "/search", "/api/**").permitAll()
-                .anyRequest().permitAll();
+                .antMatchers("/dashboard/**", "/test-cors", "/actuator/health", "/api/v1/auth/login", "/search", "/add-to-cart", "/purchase", "/product-click", "/buy-now-click").permitAll()
+                .anyRequest().authenticated();
         return http.build();
     }
 }

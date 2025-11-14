@@ -8,6 +8,7 @@ import java.util.List;
 
 public interface SearchEventRepository extends JpaRepository<SearchEvent, Long> {
     long countByShopIdAndTimestampMsBetween(String shopId, Long from, Long to);
+    long countByShopId(String shopId);
     List<SearchEvent> findAllByShopIdAndTimestampMsBetween(String shopId, Long from, Long to);
     List<SearchEvent> findAllByShopIdAndSessionId(String shopId, String sessionId);
 

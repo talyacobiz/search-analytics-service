@@ -13,4 +13,5 @@ public interface PurchaseEventRepository extends JpaRepository<PurchaseEvent, Lo
     Double sumTotalAmountByShopIdAndTimestampMsBetween(@Param("shop") String shopId, @Param("from") Long from, @Param("to") Long to);
 
     List<PurchaseEvent> findAllByShopIdAndTimestampMsBetween(String shopId, Long from, Long to);
+    long countByShopId(String shopId);
 }
