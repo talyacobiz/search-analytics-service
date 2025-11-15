@@ -13,7 +13,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.List;
 
 @RestController
-@CrossOrigin(origins = "https://searchwithai.myshopify.com")
+@RequestMapping("/api/v1/events")
+@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class EventController {
 
@@ -42,7 +43,7 @@ public class EventController {
 
     @RequestMapping(value = "/search", method = RequestMethod.OPTIONS)
     public void corsHeadersSearch(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "https://searchwithai.myshopify.com");
+        response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type");
         response.setStatus(HttpServletResponse.SC_OK);
@@ -92,7 +93,7 @@ public class EventController {
 
     @RequestMapping(value = "/add-to-cart", method = RequestMethod.OPTIONS)
     public void corsHeadersAddToCart(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "https://searchwithai.myshopify.com");
+        response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type");
         response.setStatus(HttpServletResponse.SC_OK);
@@ -115,7 +116,7 @@ public class EventController {
 
     @RequestMapping(value = "/purchase", method = RequestMethod.OPTIONS)
     public void corsHeadersPurchase(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "https://searchwithai.myshopify.com");
+        response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type");
         response.setStatus(HttpServletResponse.SC_OK);
@@ -137,7 +138,7 @@ public class EventController {
 
     @RequestMapping(value = "/product-click", method = RequestMethod.OPTIONS)
     public void corsHeadersProductClick(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "https://searchwithai.myshopify.com");
+        response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type");
         response.setStatus(HttpServletResponse.SC_OK);
@@ -158,7 +159,7 @@ public class EventController {
 
     @RequestMapping(value = "/buy-now-click", method = RequestMethod.OPTIONS)
     public void corsHeadersBuyNowClick(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "https://searchwithai.myshopify.com");
+        response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type");
         response.setStatus(HttpServletResponse.SC_OK);
