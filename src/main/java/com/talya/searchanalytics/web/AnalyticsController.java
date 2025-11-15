@@ -3,10 +3,13 @@ package com.talya.searchanalytics.web;
 import com.talya.searchanalytics.service.AnalyticsService;
 import com.talya.searchanalytics.web.dto.AnalyticsSummaryResponse;
 import com.talya.searchanalytics.web.dto.AnalyticsFullResponse;
+import com.talya.searchanalytics.repo.TermsAgreementRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 import javax.servlet.http.HttpServletResponse;
 
 @RestController
@@ -37,6 +40,7 @@ public class AnalyticsController {
 
     private static final Logger log = LoggerFactory.getLogger(AnalyticsController.class);
     private final AnalyticsService analyticsService;
+    private final TermsAgreementRepository termsRepo;
 
     @GetMapping(value = "/summary", produces = "application/json")
     public AnalyticsSummaryResponse summary(
@@ -45,6 +49,11 @@ public class AnalyticsController {
             @RequestParam(name = "toMs") long toMs
     ) {
         log.info("GET /summary - shopId: {}, fromMs: {}, toMs: {}", shopId, fromMs, toMs);
+        // Guard: require terms agreement
+        boolean agreed = termsRepo.findByShopId(shopId).isPresent();
+        if (!agreed) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Terms not agreed");
+        }
         return analyticsService.summary(shopId, fromMs, toMs);
     }
 
@@ -63,6 +72,11 @@ public class AnalyticsController {
             @RequestParam(name = "toMs") long toMs
     ) {
         log.info("GET /full - shopId: {}, fromMs: {}, toMs: {}", shopId, fromMs, toMs);
+        // Guard: require terms agreement
+        boolean agreed = termsRepo.findByShopId(shopId).isPresent();
+        if (!agreed) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Terms not agreed");
+        }
         return analyticsService.full(shopId, fromMs, toMs);
     }
 
