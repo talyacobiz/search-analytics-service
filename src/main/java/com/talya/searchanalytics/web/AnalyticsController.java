@@ -3,7 +3,6 @@ package com.talya.searchanalytics.web;
 import com.talya.searchanalytics.service.AnalyticsService;
 import com.talya.searchanalytics.web.dto.AnalyticsSummaryResponse;
 import com.talya.searchanalytics.web.dto.AnalyticsFullResponse;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
@@ -26,15 +25,18 @@ import org.springframework.security.core.context.SecurityContextHolder;
         exposedHeaders = {
                 "Location", "Link"
         },
-        methods = { RequestMethod.GET, RequestMethod.OPTIONS },
+        methods = { RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS },
         allowCredentials = "false",
         maxAge = 3600
 )
-@RequiredArgsConstructor
 public class AnalyticsController {
 
     private static final Logger log = LoggerFactory.getLogger(AnalyticsController.class);
     private final AnalyticsService analyticsService;
+
+    public AnalyticsController(AnalyticsService analyticsService) {
+        this.analyticsService = analyticsService;
+    }
 
     @GetMapping(value = "/summary", produces = "application/json")
     public ResponseEntity<?> summary(
@@ -72,4 +74,24 @@ public class AnalyticsController {
     }
 
     private ResponseEntity<?> error(HttpStatus status, String code) { return ResponseEntity.status(status).body(java.util.Map.of("error", code)); }
+
+    /*@PostMapping("/buy-now")
+    public ResponseEntity<?> buyNow(@RequestBody java.util.Map<String, Object> event) {
+        String shopId = (String) event.get("shopId");
+        if (shopId == null) return error(HttpStatus.BAD_REQUEST, "MISSING_SHOP_ID");
+        
+        log.info("POST /buy-now - shopId: {}, productId: {}", shopId, event.get("product_id"));
+        analyticsService.recordBuyNow(shopId, event);
+        return ResponseEntity.ok(java.util.Map.of("status", "recorded"));
+    }
+
+    @PostMapping("/product-click")
+    public ResponseEntity<?> productClick(@RequestBody java.util.Map<String, Object> event) {
+        String shopId = (String) event.get("shopId");
+        if (shopId == null) return error(HttpStatus.BAD_REQUEST, "MISSING_SHOP_ID");
+        
+        log.info("POST /product-click - shopId: {}, productId: {}", shopId, event.get("product_id"));
+        analyticsService.recordProductClick(shopId, event);
+        return ResponseEntity.ok(java.util.Map.of("status", "recorded"));
+    }*/
 }
