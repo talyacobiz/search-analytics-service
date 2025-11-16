@@ -11,11 +11,30 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/shops")
+@CrossOrigin(
+        originPatterns = {
+                "https://searchwithai.myshopify.com",
+                "http://localhost:*",
+                "https://*.ngrok-free.app",
+                "https://dashboard.searchaiengine.com"
+        },
+        allowedHeaders = {
+                "Content-Type",
+                "Accept",
+                "Authorization",
+                "X-Requested-With",
+                "ngrok-skip-browser-warning"
+        },
+        methods = { RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS },
+        allowCredentials = "true",
+        maxAge = 3600
+)
 @RequiredArgsConstructor
 public class ShopAdminController {
 
@@ -67,6 +86,23 @@ public class ShopAdminController {
         boolean ok = shopService.updateStatus(domain, status);
         if (!ok) return error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND");
         return ResponseEntity.ok(Map.of("shopDomain", domain, "status", status.name()));
+    }
+
+    // Single OPTIONS handler for all methods under /api/v1/shops
+    @RequestMapping(method = RequestMethod.OPTIONS, value = "/**")
+    public void handleOptions(HttpServletResponse response) {
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
+        response.setStatus(HttpServletResponse.SC_OK);
+    }
+
+    @GetMapping("/{domain}")
+    public ResponseEntity<?> get(@PathVariable String domain) {
+        if (!isOwner()) return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
+        boolean ok = shopService.disable(domain);
+        if (!ok) return error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND");
+        return ResponseEntity.ok(Map.of("shopDomain", domain, "status", "DISABLED"));
     }
 
     @DeleteMapping("/{domain}")

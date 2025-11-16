@@ -3,6 +3,9 @@ package com.talya.searchanalytics.web;
 import com.talya.searchanalytics.service.AnalyticsService;
 import com.talya.searchanalytics.repo.TermsAgreementRepository;
 import lombok.RequiredArgsConstructor;
+
+import javax.servlet.http.HttpServletResponse;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
@@ -86,6 +89,21 @@ public class AnalyticsController {
         if (a == null) return null;
         Object p = a.getPrincipal();
         return (p instanceof String) ? (String)p : null;
+    }
+    @RequestMapping(value = "/full", method = RequestMethod.OPTIONS)
+    public void corsHeadersFull(HttpServletResponse response) {
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        response.setStatus(HttpServletResponse.SC_OK);
+    }
+
+    @RequestMapping(value = "/summary", method = RequestMethod.OPTIONS)
+    public void corsHeadersSummary(HttpServletResponse response) {
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        response.setStatus(HttpServletResponse.SC_OK);
     }
 
     private ResponseEntity<?> error(HttpStatus status, String code) { return ResponseEntity.status(status).body(java.util.Map.of("error", code)); }

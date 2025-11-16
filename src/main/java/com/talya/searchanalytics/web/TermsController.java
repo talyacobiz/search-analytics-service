@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 @RestController
 @RequestMapping("/api/v1/terms")
@@ -83,5 +84,23 @@ public class TermsController {
                         .agreed(false)
                         .shopId(shopId)
                         .build()));
+    }
+
+    @RequestMapping(value = "/agree", method = RequestMethod.OPTIONS)
+    public void corsHeadersAgree(HttpServletResponse response) {
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        response.setStatus(HttpServletResponse.SC_OK);
+    }
+
+        
+    @RequestMapping(value = "/status", method = RequestMethod.OPTIONS)
+    public void corsHeadersForStatus(HttpServletResponse response) {
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, X-Requested-With, ngrok-skip-browser-warning");
+        response.setStatus(HttpServletResponse.SC_OK);
     }
 }
