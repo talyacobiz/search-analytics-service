@@ -10,6 +10,8 @@ public class TermsDTOs {
         private String shopId;
         private String termsVersion; // optional
         private Instant acceptedAt;  // optional; if null server sets now
+        private String ip;           // optional; server can derive if missing
+        private String userAgent;    // optional; server can derive if missing
     }
 
     @Data @NoArgsConstructor @AllArgsConstructor @Builder

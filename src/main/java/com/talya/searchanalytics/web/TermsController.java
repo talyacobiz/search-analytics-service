@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import javax.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/v1/terms")
@@ -38,7 +39,7 @@ public class TermsController {
     private final TermsAgreementRepository termsRepo;
 
     @PostMapping(value = "/agree", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<?> agree(@RequestBody AgreeRequest req) {
+    public ResponseEntity<?> agree(@RequestBody AgreeRequest req, HttpServletRequest httpReq) {
         if (req.getShopId() == null || req.getShopId().isEmpty()) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", "shopId is required"));
         }
@@ -46,10 +47,18 @@ public class TermsController {
         String version = req.getTermsVersion();
         Instant acceptedAt = (req.getAcceptedAt() != null) ? req.getAcceptedAt() : Instant.now();
 
+        // Determine client IP and user-agent if not provided by client
+        String ipFromHeader = httpReq.getHeader("X-Forwarded-For");
+        String derivedIp = (ipFromHeader != null && !ipFromHeader.isEmpty()) ? ipFromHeader.split(",")[0].trim() : httpReq.getRemoteAddr();
+        String clientIp = (req.getIp() != null && !req.getIp().isEmpty()) ? req.getIp() : derivedIp;
+        String clientUa = (req.getUserAgent() != null && !req.getUserAgent().isEmpty()) ? req.getUserAgent() : httpReq.getHeader("User-Agent");
+
         TermsAgreement agreement = termsRepo.findByShopId(shopId)
                 .orElse(TermsAgreement.builder().shopId(shopId).build());
         agreement.setTermsVersion(version);
         agreement.setAcceptedAt(acceptedAt);
+        agreement.setIpAddress(clientIp);
+        agreement.setUserAgent(clientUa);
         agreement = termsRepo.save(agreement);
 
         log.info("POST /api/v1/terms/agree - shopId: {}, version: {}", shopId, version);

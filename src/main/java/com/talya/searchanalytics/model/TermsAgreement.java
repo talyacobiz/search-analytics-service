@@ -26,4 +26,10 @@ public class TermsAgreement {
 
     @Column(nullable = false)
     private Instant acceptedAt;
+
+    @Column
+    private String ipAddress;
+
+    @Column(length = 1024)
+    private String userAgent;
 }
