@@ -19,11 +19,20 @@ public class BuyNowClickEvent {
     @Column
     private String customerId;
 
-    @Column(nullable=false)
+    @Column
+    private String clientId;
+
+    @Column
     private String sessionId;
 
-    @Column(nullable=false)
+    @Column
     private String productId;
+
+    @Column
+    private Double price;
+
+    @Column
+    private String currency;
 
     @Column(nullable=false)
     private Long timestampMs;

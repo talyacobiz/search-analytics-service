@@ -19,14 +19,26 @@ public class ProductClickEvent {
     @Column
     private String customerId;
 
-    @Column(nullable=false)
+    @Column
+    private String clientId;
+
+    @Column
     private String sessionId;
 
-    @Column(nullable=false)
+    @Column
     private String productId;
 
     @Column
     private String searchId;
+
+    @Column
+    private String query;
+
+    @Column
+    private String productTitle;
+
+    @Column
+    private String url;
 
     @Column(nullable=false)
     private Long timestampMs;
