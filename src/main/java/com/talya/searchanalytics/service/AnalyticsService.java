@@ -25,10 +25,13 @@ public class AnalyticsService {
     private final BuyNowClickEventRepository buyNowRepo;
 
     public AnalyticsSummaryResponse summary(String shopId, long fromMs, long toMs) {
-        // Count total search events (each search counts separately)
-        long searches = searchRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-        
-        long purchases = purchaseRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
+        try {
+            log.info("Starting analytics summary for shopId: {}, fromMs: {}, toMs: {}", shopId, fromMs, toMs);
+            
+            // Count total search events (each search counts separately)
+            long searches = searchRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
+            
+            long purchases = purchaseRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
         Double totalRevenue = purchaseRepo.sumTotalAmountByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
         if (totalRevenue == null) totalRevenue = 0d;
         double conv = (searches == 0) ? 0 : (purchases * 100.0 / searches);
@@ -186,22 +189,29 @@ public class AnalyticsService {
         }
         long prevBuyNowClicks = validPrevBuyNowEvents.size();
         
-        // Calculate previous period click-through rate using unique searches
-        java.util.Map<String, java.util.Set<String>> prevSessionToSearchIds = new java.util.HashMap<>();
+        // Calculate previous period click-through rate using same logic
+        java.util.Map<String, java.util.List<String>> prevSessionToSearchIds = new java.util.HashMap<>();
         for (com.talya.searchanalytics.model.SearchEvent se : prevSearchEvents) {
             if (se.getSessionId() != null && se.getSearchId() != null) {
-                prevSessionToSearchIds.computeIfAbsent(se.getSessionId(), k -> new java.util.HashSet<>()).add(se.getSearchId());
+                prevSessionToSearchIds.computeIfAbsent(se.getSessionId(), k -> new java.util.ArrayList<>()).add(se.getSearchId());
             }
         }
         
         java.util.Set<String> prevSearchesWithClicks = new java.util.HashSet<>();
+        java.util.Map<String, Integer> prevSessionClickCount = new java.util.HashMap<>();
+        
         for (com.talya.searchanalytics.model.ProductClickEvent e : validPrevClickEvents) {
             if (e.getSearchId() != null && !e.getSearchId().isEmpty()) {
                 prevSearchesWithClicks.add(e.getSearchId());
             } else if (e.getSessionId() != null) {
-                java.util.Set<String> searchIds = prevSessionToSearchIds.get(e.getSessionId());
+                java.util.List<String> searchIds = prevSessionToSearchIds.get(e.getSessionId());
                 if (searchIds != null) {
-                    prevSearchesWithClicks.addAll(searchIds);
+                    int clickCount = prevSessionClickCount.getOrDefault(e.getSessionId(), 0);
+                    if (clickCount < searchIds.size()) {
+                        String searchId = searchIds.get(clickCount);
+                        prevSearchesWithClicks.add(searchId);
+                    }
+                    prevSessionClickCount.put(e.getSessionId(), clickCount + 1);
                 }
             }
         }
@@ -285,6 +295,35 @@ public class AnalyticsService {
                 .addToCartAmountChangePercent(addToCartAmountChangePercent)
                 .currency(currency)
                 .build();
+        } catch (Exception e) {
+            log.error("Error calculating analytics summary for shopId: {}", shopId, e);
+            
+            // Return safe default response
+            return AnalyticsSummaryResponse.builder()
+                    .totalSearches(0L)
+                    .totalAddToCart(0L)
+                    .totalPurchases(0L)
+                    .totalProductClicks(0L)
+                    .totalBuyNowClicks(0L)
+                    .totalRevenue(0.0)
+                    .conversionRate(0.0)
+                    .clickThroughRate(0.0)
+                    .timeSeries(new ArrayList<>())
+                    .topQueries(new ArrayList<>())
+                    .searchesChangePercent(0.0)
+                    .addToCartChangePercent(0.0)
+                    .purchasesChangePercent(0.0)
+                    .productClicksChangePercent(0.0)
+                    .buyNowClicksChangePercent(0.0)
+                    .revenueChangePercent(0.0)
+                    .conversionRateChangePercent(0.0)
+                    .clickThroughRateChangePercent(0.0)
+                    .totalAddToCartAmount(0.0)
+                    .prevAddToCartAmount(0.0)
+                    .addToCartAmountChangePercent(0.0)
+                    .currency("NIS")
+                    .build();
+        }
     }
 
     private Double percentChange(double prev, double curr) {
