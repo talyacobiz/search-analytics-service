@@ -55,6 +55,7 @@ public class AnalyticsService {
         List<com.talya.searchanalytics.model.ProductClickEvent> prevClickEvents = clickRepo.findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
         List<com.talya.searchanalytics.model.BuyNowClickEvent> prevBuyNowEvents = buyNowRepo.findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
         List<com.talya.searchanalytics.model.SearchEvent> prevSearchEvents = searchRepo.findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
+        List<com.talya.searchanalytics.model.PurchaseEvent> prevPurchaseEvents = purchaseRepo.findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
 
         // Helper: sessionId -> list of productIds from searches
         java.util.Map<String, java.util.Set<String>> sessionProducts = new java.util.HashMap<>();

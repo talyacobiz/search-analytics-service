@@ -8,6 +8,7 @@ import java.util.List;
 @Table(name="search_events", indexes = {
         @Index(name="idx_search_shop_time", columnList="shopId, timestampMs"),
         @Index(name="idx_search_session", columnList="sessionId")
+        @Index(name="idx_search_user", columnList="customerId")
 })
 @Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class SearchEvent {

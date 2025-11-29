@@ -36,6 +36,11 @@ public class EventDTOs {
         private List<String> productIds;
         private Double totalAmount;
         private String currency;
+        private String productTitles;
+        private String variantIds;
+        private String orderId;
+        private String orderStatus;
+        private String searchId;
         private Long timestampMs;
     }
 
