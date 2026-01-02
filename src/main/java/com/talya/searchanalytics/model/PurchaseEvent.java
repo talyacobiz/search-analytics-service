@@ -4,35 +4,39 @@ import javax.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name="purchase_events", indexes = {
-        @Index(name="idx_purchase_shop_time", columnList="shopId, timestampMs"),
-        @Index(name="idx_purchase_session", columnList="sessionId")
+@Table(name = "purchase_events", indexes = {
+        @Index(name = "idx_purchase_shop_time", columnList = "shopId, timestampMs"),
+        @Index(name = "idx_purchase_session", columnList = "sessionId")
 })
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class PurchaseEvent {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable=false)
+    @Column(nullable = false)
     private String shopId;
 
     @Column
-    private String customerId;
+    private String clientId;
 
-    @Column(nullable=false)
+    @Column(nullable = false)
     private String sessionId;
 
     @ElementCollection
-    @CollectionTable(name="purchase_products", joinColumns=@JoinColumn(name="purchase_event_id"))
-    @Column(name="productId")
+    @CollectionTable(name = "purchase_products", joinColumns = @JoinColumn(name = "purchase_event_id"))
+    @Column(name = "productId")
     private java.util.List<String> productIds;
 
-    @Column(nullable=false)
+    @Column(nullable = false)
     private Double totalAmount;
 
     @Column
     private String currency;
 
-    @Column(nullable=false)
+    @Column(nullable = false)
     private Long timestampMs;
 }

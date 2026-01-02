@@ -8,13 +8,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import javax.servlet.http.HttpServletResponse;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/events")
-@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class EventController {
 
@@ -32,21 +29,13 @@ public class EventController {
         SearchEvent e = SearchEvent.builder()
                 .shopId(req.getShopId())
                 .searchId(req.getSearchId())
-                .customerId(req.getCustomerId())
+                .clientId(req.getClientId())
                 .sessionId(req.getSessionId())
                 .query(req.getQuery())
                 .productIds(req.getProductIds())
                 .timestampMs(req.getTimestampMs())
                 .build();
         return ResponseEntity.ok(searchRepo.save(e).getId());
-    }
-
-    @RequestMapping(value = "/search", method = RequestMethod.OPTIONS)
-    public void corsHeadersSearch(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "*");
-        response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-        response.setStatus(HttpServletResponse.SC_OK);
     }
 
     @PostMapping("/add-to-cart")
@@ -75,12 +64,13 @@ public class EventController {
             }
         }
         if (!found) {
-            log.info("AddToCartEvent ignored: productId {} not found in any search results for session {}", req.getProductId(), req.getSessionId());
+            log.info("AddToCartEvent ignored: productId {} not found in any search results for session {}",
+                    req.getProductId(), req.getSessionId());
             return ResponseEntity.noContent().build();
         }
         AddToCartEvent e = AddToCartEvent.builder()
                 .shopId(req.getShopId())
-                .customerId(req.getCustomerId())
+                .clientId(req.getClientId())
                 .sessionId(req.getSessionId())
                 .productId(req.getProductId())
                 .searchId(req.getSearchId())
@@ -91,20 +81,12 @@ public class EventController {
         return ResponseEntity.ok(cartRepo.save(e).getId());
     }
 
-    @RequestMapping(value = "/add-to-cart", method = RequestMethod.OPTIONS)
-    public void corsHeadersAddToCart(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "*");
-        response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-        response.setStatus(HttpServletResponse.SC_OK);
-    }
-
     @PostMapping("/purchase")
     public ResponseEntity<?> recordPurchase(@RequestBody PurchaseRequest req) {
         log.info("POST /api/v1/events/purchase - payload: {}", req);
         PurchaseEvent e = PurchaseEvent.builder()
                 .shopId(req.getShopId())
-                .customerId(req.getCustomerId())
+                .clientId(req.getClientId())
                 .sessionId(req.getSessionId())
                 .productIds(req.getProductIds())
                 .totalAmount(req.getTotalAmount())
@@ -114,20 +96,12 @@ public class EventController {
         return ResponseEntity.ok(purchaseRepo.save(e).getId());
     }
 
-    @RequestMapping(value = "/purchase", method = RequestMethod.OPTIONS)
-    public void corsHeadersPurchase(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "*");
-        response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-        response.setStatus(HttpServletResponse.SC_OK);
-    }
-
     @PostMapping("/product-click")
     public ResponseEntity<?> recordProductClick(@RequestBody ProductClickRequest req) {
         log.info("POST /api/v1/events/product-click - payload: {}", req);
         ProductClickEvent e = ProductClickEvent.builder()
                 .shopId(req.getShopId())
-                .customerId(req.getCustomerId())
+                .clientId(req.getClientId())
                 .sessionId(req.getSessionId())
                 .productId(req.getProductId())
                 .searchId(req.getSearchId())
@@ -136,20 +110,12 @@ public class EventController {
         return ResponseEntity.ok(clickRepo.save(e).getId());
     }
 
-    @RequestMapping(value = "/product-click", method = RequestMethod.OPTIONS)
-    public void corsHeadersProductClick(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "*");
-        response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-        response.setStatus(HttpServletResponse.SC_OK);
-    }
-
     @PostMapping("/buy-now-click")
     public ResponseEntity<?> recordBuyNowClick(@RequestBody BuyNowClickRequest req) {
         log.info("POST /api/v1/events/buy-now-click - payload: {}", req);
         BuyNowClickEvent e = BuyNowClickEvent.builder()
                 .shopId(req.getShopId())
-                .customerId(req.getCustomerId())
+                .clientId(req.getClientId())
                 .sessionId(req.getSessionId())
                 .productId(req.getProductId())
                 .timestampMs(req.getTimestampMs())
@@ -157,11 +123,4 @@ public class EventController {
         return ResponseEntity.ok(buyNowRepo.save(e).getId());
     }
 
-    @RequestMapping(value = "/buy-now-click", method = RequestMethod.OPTIONS)
-    public void corsHeadersBuyNowClick(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "*");
-        response.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-        response.setStatus(HttpServletResponse.SC_OK);
-    }
 }

@@ -4,20 +4,21 @@ import javax.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name="buy_now_click_events", indexes = {
-        @Index(name="idx_buynow_shop_time", columnList="shopId, timestampMs"),
-        @Index(name="idx_buynow_session", columnList="sessionId")
+@Table(name = "buy_now_click_events", indexes = {
+        @Index(name = "idx_buynow_shop_time", columnList = "shopId, timestampMs"),
+        @Index(name = "idx_buynow_session", columnList = "sessionId")
 })
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class BuyNowClickEvent {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable=false)
+    @Column(nullable = false)
     private String shopId;
-
-    @Column
-    private String customerId;
 
     @Column
     private String clientId;
@@ -34,6 +35,6 @@ public class BuyNowClickEvent {
     @Column
     private String currency;
 
-    @Column(nullable=false)
+    @Column(nullable = false)
     private Long timestampMs;
 }

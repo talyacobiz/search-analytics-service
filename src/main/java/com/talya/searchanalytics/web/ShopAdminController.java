@@ -17,24 +17,6 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/shops")
-@CrossOrigin(
-        originPatterns = {
-                "https://searchwithai.myshopify.com",
-                "http://localhost:*",
-                "https://*.ngrok-free.app",
-                "https://dashboard.searchaiengine.com"
-        },
-        allowedHeaders = {
-                "Content-Type",
-                "Accept",
-                "Authorization",
-                "X-Requested-With",
-                "ngrok-skip-browser-warning"
-        },
-        methods = { RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS },
-        allowCredentials = "true",
-        maxAge = 3600
-)
 @RequiredArgsConstructor
 public class ShopAdminController {
 
@@ -43,48 +25,58 @@ public class ShopAdminController {
 
     private boolean isOwner() {
         Authentication a = SecurityContextHolder.getContext().getAuthentication();
-        if (a == null) return false;
+        if (a == null)
+            return false;
         return a.getAuthorities().stream().anyMatch(auth -> "ROLE_OWNER".equals(auth.getAuthority()));
     }
 
     @PostMapping
     public ResponseEntity<?> create(@RequestBody CreateShopRequest req) {
-        if (!isOwner()) return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
-        if (shopRepository.existsByShopDomain(req.getShopDomain())) return error(HttpStatus.CONFLICT, "ALREADY_EXISTS");
+        if (!isOwner())
+            return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
+        if (shopRepository.existsByShopDomain(req.getShopDomain()))
+            return error(HttpStatus.CONFLICT, "ALREADY_EXISTS");
         ShopService.ShopCreation creation = shopService.createShopReturnPlain(req.getShopDomain());
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                 "shopDomain", creation.getShop().getShopDomain(),
                 "generatedPassword", creation.getPlaintextPassword(),
-                "role", Shop.Role.SHOP.name()
-        ));
+                "role", Shop.Role.SHOP.name()));
     }
 
     @GetMapping
     public ResponseEntity<?> list() {
-        if (!isOwner()) return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
+        if (!isOwner())
+            return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
         return ResponseEntity.ok(Map.of("shops", shopService.list().stream().map(s -> Map.of(
                 "shopDomain", s.getShopDomain(),
                 "role", s.getRole().name(),
                 "createdAt", s.getCreatedAt(),
-                "status", s.getStatus().name()
-        )).collect(Collectors.toList())));
+                "status", s.getStatus().name())).collect(Collectors.toList())));
     }
 
     @PostMapping("/{domain}/rotate")
     public ResponseEntity<?> rotate(@PathVariable String domain) {
-        if (!isOwner()) return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
+        if (!isOwner())
+            return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
         return shopService.rotatePassword(domain)
-                .<ResponseEntity<?>>map(pwd -> ResponseEntity.ok(Map.of("shopDomain", domain, "generatedPassword", pwd)))
+                .<ResponseEntity<?>>map(
+                        pwd -> ResponseEntity.ok(Map.of("shopDomain", domain, "generatedPassword", pwd)))
                 .orElseGet(() -> error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND"));
     }
 
     @PutMapping("/{domain}/status")
     public ResponseEntity<?> status(@PathVariable String domain, @RequestBody StatusRequest req) {
-        if (!isOwner()) return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
+        if (!isOwner())
+            return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
         Shop.Status status;
-        try { status = Shop.Status.valueOf(req.getStatus()); } catch (Exception e) { return error(HttpStatus.BAD_REQUEST, "INVALID_STATUS"); }
+        try {
+            status = Shop.Status.valueOf(req.getStatus());
+        } catch (Exception e) {
+            return error(HttpStatus.BAD_REQUEST, "INVALID_STATUS");
+        }
         boolean ok = shopService.updateStatus(domain, status);
-        if (!ok) return error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND");
+        if (!ok)
+            return error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND");
         return ResponseEntity.ok(Map.of("shopDomain", domain, "status", status.name()));
     }
 
@@ -99,23 +91,31 @@ public class ShopAdminController {
 
     @GetMapping("/{domain}")
     public ResponseEntity<?> get(@PathVariable String domain) {
-        if (!isOwner()) return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
-        boolean ok = shopService.disable(domain);
-        if (!ok) return error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND");
-        return ResponseEntity.ok(Map.of("shopDomain", domain, "status", "DISABLED"));
+        if (!isOwner())
+            return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
+        return shopRepository.findByShopDomain(domain)
+                .<ResponseEntity<?>>map(shop -> ResponseEntity.ok(Map.of(
+                        "shopDomain", shop.getShopDomain(),
+                        "role", shop.getRole().name(),
+                        "status", shop.getStatus().name(),
+                        "createdAt", shop.getCreatedAt())))
+                .orElseGet(() -> error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND"));
     }
 
     @DeleteMapping("/{domain}")
     public ResponseEntity<?> delete(@PathVariable String domain) {
-        if (!isOwner()) return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
+        if (!isOwner())
+            return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
         boolean ok = shopService.disable(domain);
-        if (!ok) return error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND");
+        if (!ok)
+            return error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND");
         return ResponseEntity.ok(Map.of("shopDomain", domain, "status", "DISABLED"));
     }
 
     @PatchMapping("/{domain}")
     public ResponseEntity<?> updateShop(@PathVariable String domain, @RequestBody UpdateShopRequest req) {
-        if (!isOwner()) return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
+        if (!isOwner())
+            return error(HttpStatus.FORBIDDEN, "FORBIDDEN");
         return shopRepository.findByShopDomain(domain).map(shop -> {
             if (req.getPassword() != null && !req.getPassword().isBlank()) {
                 shop.setPasswordHash(shopService.hashPassword(req.getPassword()));
@@ -132,13 +132,23 @@ public class ShopAdminController {
         }).<ResponseEntity<?>>orElseGet(() -> error(HttpStatus.NOT_FOUND, "SHOP_NOT_FOUND"));
     }
 
-    private ResponseEntity<?> error(HttpStatus status, String code) { return ResponseEntity.status(status).body(Map.of("error", code)); }
+    private ResponseEntity<?> error(HttpStatus status, String code) {
+        return ResponseEntity.status(status).body(Map.of("error", code));
+    }
 
     @Data
-    public static class CreateShopRequest { private String shopDomain; }
+    public static class CreateShopRequest {
+        private String shopDomain;
+    }
+
     @Data
-    public static class StatusRequest { private String status; }
+    public static class StatusRequest {
+        private String status;
+    }
+
     @Data
-    public static class UpdateShopRequest { private String password; private String role; }
+    public static class UpdateShopRequest {
+        private String password;
+        private String role;
+    }
 }
-

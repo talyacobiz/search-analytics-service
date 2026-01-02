@@ -22,17 +22,11 @@ public class SecurityConfig {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
 
         // Explicitly allow your frontend origins including ngrok
-        corsConfiguration.setAllowedOriginPatterns(Arrays.asList(
-                "https://searchwithai.myshopify.com",
-                "https://dashboard.searchaiengine.com",
-                "http://localhost:*",
-                "https://*.ngrok-free.app"
-        ));
+        corsConfiguration.setAllowedOriginPatterns(Arrays.asList("*"));
 
         // Allowed HTTP methods
         corsConfiguration.setAllowedMethods(Arrays.asList(
-                "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"
-        ));
+                "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
 
         // Allowed headers including Authorization
         corsConfiguration.setAllowedHeaders(Arrays.asList(
@@ -40,8 +34,8 @@ public class SecurityConfig {
                 "Accept",
                 "Authorization",
                 "X-Requested-With",
-                "ngrok-skip-browser-warning"
-        ));
+                "ngrok-skip-browser-warning",
+                "x-idempotency-key"));
 
         corsConfiguration.setAllowCredentials(true); // Must be true for Authorization header
         corsConfiguration.setMaxAge(3600L);
@@ -54,14 +48,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth
-                    // Allow all OPTIONS requests for preflight
-                    .requestMatchers(new AntPathRequestMatcher("/**", HttpMethod.OPTIONS.name())).permitAll()
-                    // Require authentication for everything else
-                    .anyRequest().authenticated()
-            );
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth
+                        // Allow all OPTIONS requests for preflight
+                        .requestMatchers(new AntPathRequestMatcher("/**", HttpMethod.OPTIONS.name())).permitAll());
 
         return http.build();
     }

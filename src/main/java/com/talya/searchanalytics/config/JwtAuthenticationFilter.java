@@ -28,7 +28,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
         String path = request.getRequestURI();
         // Allow unauthenticated access to login and event ingestion endpoints
         if (path.startsWith("/api/v1/auth/login") || isPublicEventEndpoint(path)) {
@@ -54,7 +55,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 forbidden(response, "SHOP_DISABLED");
                 return;
             }
-            Authentication authObj = new UsernamePasswordAuthenticationToken(shopDomain, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+            Authentication authObj = new UsernamePasswordAuthenticationToken(shopDomain, null,
+                    List.of(new SimpleGrantedAuthority("ROLE_" + role)));
             SecurityContextHolder.getContext().setAuthentication(authObj);
         } catch (Exception e) {
             unauthorized(response, "INVALID_TOKEN");
@@ -64,7 +66,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean isPublicEventEndpoint(String path) {
-        return "/search".equals(path) || "/add-to-cart".equals(path) || "/purchase".equals(path) || "/product-click".equals(path) || "/buy-now-click".equals(path) || path.startsWith("/dashboard/") || "/test-cors".equals(path);
+        return path.startsWith("/api/v1/events/");
     }
 
     private void unauthorized(HttpServletResponse resp, String code) throws IOException {
@@ -79,4 +81,3 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         resp.getWriter().write("{\"error\":\"" + code + "\"}");
     }
 }
-
