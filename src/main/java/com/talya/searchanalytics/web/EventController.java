@@ -56,18 +56,27 @@ public class EventController {
         }
         // Smart add-to-cart logic
         List<SearchEvent> searches = searchRepo.findAllByShopIdAndSessionId(req.getShopId(), req.getSessionId());
+        log.info("🛒 Add-to-cart validation: sessionId={}, productId={}, found {} search events",
+                req.getSessionId(), req.getProductId(), searches.size());
+
         boolean found = false;
         for (SearchEvent search : searches) {
-            if (search.getProductIds() != null && search.getProductIds().contains(req.getProductId())) {
-                found = true;
-                break;
+            if (search.getProductIds() != null) {
+                log.debug("Search {} has {} products: {}", search.getSearchId(),
+                        search.getProductIds().size(), search.getProductIds());
+                if (search.getProductIds().contains(req.getProductId())) {
+                    found = true;
+                    break;
+                }
             }
         }
         if (!found) {
-            log.info("AddToCartEvent ignored: productId {} not found in any search results for session {}",
-                    req.getProductId(), req.getSessionId());
+            log.warn(
+                    "❌ AddToCartEvent REJECTED: productId {} not found in any search results for session {}. Searched {} events.",
+                    req.getProductId(), req.getSessionId(), searches.size());
             return ResponseEntity.noContent().build();
         }
+        log.info("✅ AddToCartEvent ACCEPTED: productId {} found in search results", req.getProductId());
         AddToCartEvent e = AddToCartEvent.builder()
                 .shopId(req.getShopId())
                 .clientId(req.getClientId())
@@ -82,18 +91,60 @@ public class EventController {
     }
 
     @PostMapping("/purchase")
-    public ResponseEntity<?> recordPurchase(@RequestBody PurchaseRequest req) {
-        log.info("POST /api/v1/events/purchase - payload: {}", req);
-        PurchaseEvent e = PurchaseEvent.builder()
-                .shopId(req.getShopId())
-                .clientId(req.getClientId())
-                .sessionId(req.getSessionId())
-                .productIds(req.getProductIds())
-                .totalAmount(req.getTotalAmount())
-                .currency(req.getCurrency())
-                .timestampMs(req.getTimestampMs())
-                .build();
-        return ResponseEntity.ok(purchaseRepo.save(e).getId());
+    public ResponseEntity<?> handleShopifyOrder(@RequestBody java.util.Map<String, Object> orderData) {
+        try {
+            // --- Extract raw Shopify info ---
+            String shopId = (String) orderData.get("shopId");
+            log.info("🛍️ Received Shopify order from: {}", shopId);
+
+            String searchaiUserId = (String) orderData.get("searchai_user_id");
+            String searchaiSessionId = (String) orderData.get("searchai_session_id");
+            String currency = (String) orderData.get("currency");
+            Object timeObj = orderData.get("time");
+            Long timestampMs = timeObj instanceof Number ? ((Number) timeObj).longValue() : System.currentTimeMillis();
+
+            @SuppressWarnings("unchecked")
+            List<java.util.Map<String, Object>> products = (List<java.util.Map<String, Object>>) orderData
+                    .get("products");
+
+            // --- Convert product list ---
+            List<String> productIds = new java.util.ArrayList<>();
+            List<String> productTitles = new java.util.ArrayList<>();
+            double totalAmount = 0.0;
+
+            if (products != null) {
+                for (java.util.Map<String, Object> p : products) {
+                    productIds.add(String.valueOf(p.get("product_id")));
+                    productTitles.add((String) p.get("name"));
+
+                    double price = Double.parseDouble(p.get("price").toString());
+                    int qty = Integer.parseInt(p.get("amount").toString());
+                    totalAmount += price * qty;
+                }
+            }
+
+            // --- Build PurchaseEvent ---
+            PurchaseEvent purchase = PurchaseEvent.builder()
+                    .shopId(shopId)
+                    .clientId(searchaiUserId)
+                    .sessionId(searchaiSessionId)
+                    .productIds(productIds)
+                    .productTitles(String.join(",", productTitles))
+                    .totalAmount(totalAmount)
+                    .currency(currency)
+                    .timestampMs(timestampMs)
+                    .orderStatus((String) orderData.get("financial_status"))
+                    .build();
+
+            purchaseRepo.save(purchase);
+            log.info("✅ Saved purchase event for order with {} products", productIds.size());
+
+            return ResponseEntity.ok().build();
+
+        } catch (Exception e) {
+            log.error("❌ Error processing Shopify order: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("Error processing order: " + e.getMessage());
+        }
     }
 
     @PostMapping("/product-click")

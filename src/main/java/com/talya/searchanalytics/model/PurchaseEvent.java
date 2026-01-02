@@ -13,30 +13,44 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class PurchaseEvent {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Shopify store domain */
     @Column(nullable = false)
     private String shopId;
 
     @Column
     private String clientId;
 
-    @Column(nullable = false)
+    @Column
     private String sessionId;
 
+    /** List of purchased product IDs */
     @ElementCollection
     @CollectionTable(name = "purchase_products", joinColumns = @JoinColumn(name = "purchase_event_id"))
     @Column(name = "productId")
     private java.util.List<String> productIds;
 
+    /** Total order value in currency */
     @Column(nullable = false)
     private Double totalAmount;
 
+    /** ISO currency code (ILS, USD, etc.) */
     @Column
     private String currency;
 
+    /** Comma-separated product titles */
+    @Column
+    private String productTitles;
+
+    /** Shopify financial status (paid, refunded, etc.) */
+    @Column
+    private String orderStatus;
+
+    /** Unix timestamp (ms) of purchase detection */
     @Column(nullable = false)
     private Long timestampMs;
 }
