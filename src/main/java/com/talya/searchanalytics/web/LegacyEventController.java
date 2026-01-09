@@ -32,7 +32,7 @@ public class LegacyEventController {
         SearchEvent e = SearchEvent.builder()
                 .shopId(req.getShopId())
                 .searchId(req.getSearchId())
-                .customerId(req.getCustomerId())
+                .clientId(req.getClientId())
                 .sessionId(req.getSessionId())
                 .query(req.getQuery())
                 .productIds(req.getProductIds())
@@ -54,15 +54,15 @@ public class LegacyEventController {
             log.info("{} ignored: missing sessionId or productId", eventType);
             return false;
         }
-        
+
         List<SearchEvent> searches = searchRepo.findAllByShopIdAndSessionId(shopId, sessionId);
         if (searches.isEmpty()) {
             log.info("{} ignored: no search events found for session {}", eventType, sessionId);
             return false;
         }
-        
+
         log.debug("{} - Found {} search events for session {}", eventType, searches.size(), sessionId);
-        
+
         // First try direct match
         for (SearchEvent search : searches) {
             if (search.getProductIds() != null && search.getProductIds().contains(productId)) {
@@ -70,14 +70,15 @@ public class LegacyEventController {
                 return true;
             }
         }
-        
-        // If no direct match and it's a valid Shopify product format, allow it (session-based validation)
+
+        // If no direct match and it's a valid Shopify product format, allow it
+        // (session-based validation)
         if (productId.startsWith("gid://shopify/Product/")) {
-            log.debug("{} - Session-based validation: allowing product {} from session with {} searches", 
-                     eventType, productId, searches.size());
+            log.debug("{} - Session-based validation: allowing product {} from session with {} searches",
+                    eventType, productId, searches.size());
             return true;
         }
-        
+
         log.info("{} ignored: productId {} not validated for session {}", eventType, productId, sessionId);
         return false;
     }
@@ -98,14 +99,14 @@ public class LegacyEventController {
                 currency = parts[1];
             }
         }
-        
+
         if (!isValidSearchEvent(req.getShopId(), req.getSessionId(), req.getProductId(), "AddToCartEvent")) {
             return ResponseEntity.noContent().build();
         }
-        
+
         AddToCartEvent e = AddToCartEvent.builder()
                 .shopId(req.getShopId())
-                .customerId(req.getCustomerId())
+                .clientId(req.getClientId())
                 .sessionId(req.getSessionId())
                 .productId(req.getProductId())
                 .searchId(req.getSearchId())
@@ -129,10 +130,12 @@ public class LegacyEventController {
         String shopId = (String) event.get("shopId");
         String sessionId = (String) event.get("sessionId");
         String productId = (String) event.get("productId");
-        if (shopId == null) return error(HttpStatus.BAD_REQUEST, "MISSING_SHOP_ID");
+        if (shopId == null)
+            return error(HttpStatus.BAD_REQUEST, "MISSING_SHOP_ID");
 
-        log.info("POST /dashboard/buy-now-click - shopId: {}, productId: {}, sessionId: {}", shopId, productId, sessionId);
-        
+        log.info("POST /dashboard/buy-now-click - shopId: {}, productId: {}, sessionId: {}", shopId, productId,
+                sessionId);
+
         // Parse price and currency
         Double price = null;
         String currency = null;
@@ -150,17 +153,20 @@ public class LegacyEventController {
             }
         }
 
-        //TODO: Remove from comment
-        /*if (!isValidSearchEvent(shopId, sessionId, productId, "BuyNowClickEvent")) {
-            return ResponseEntity.noContent().build();
-        }*/
-        
+        // TODO: Remove from comment
+        /*
+         * if (!isValidSearchEvent(shopId, sessionId, productId, "BuyNowClickEvent")) {
+         * return ResponseEntity.noContent().build();
+         * }
+         */
+
         BuyNowClickEvent e = BuyNowClickEvent.builder()
                 .shopId(shopId)
-                .customerId((String) event.get("client_id"))
+                .clientId((String) event.get("client_id"))
                 .sessionId(sessionId)
                 .productId(productId)
-                .timestampMs(event.get("timestamp") != null ? ((Number) event.get("timestamp")).longValue() : System.currentTimeMillis())
+                .timestampMs(event.get("timestamp") != null ? ((Number) event.get("timestamp")).longValue()
+                        : System.currentTimeMillis())
                 .price(price)
                 .currency(currency)
                 .build();
@@ -173,7 +179,7 @@ public class LegacyEventController {
         String shopId = (String) event.get("shopId");
         String sessionId = (String) event.get("sessionId");
         String productId = (String) event.get("productId");
-        
+
         // URL decode the product ID if it's encoded
         if (productId != null && productId.contains("%")) {
             try {
@@ -182,26 +188,31 @@ public class LegacyEventController {
                 log.warn("Failed to decode productId: {}", productId);
             }
         }
-        
-        if (shopId == null) return error(HttpStatus.BAD_REQUEST, "MISSING_SHOP_ID");
 
-        log.info("POST /dashboard/product-click - shopId: {}, productId: {}, sessionId: {}", shopId, productId, sessionId);
+        if (shopId == null)
+            return error(HttpStatus.BAD_REQUEST, "MISSING_SHOP_ID");
 
-        //TODO: Remove from comment
-        /*if (!isValidSearchEvent(shopId, sessionId, productId, "ProductClickEvent")) {
-            return ResponseEntity.noContent().build();
-        }*/
-        
+        log.info("POST /dashboard/product-click - shopId: {}, productId: {}, sessionId: {}", shopId, productId,
+                sessionId);
+
+        // TODO: Remove from comment
+        /*
+         * if (!isValidSearchEvent(shopId, sessionId, productId, "ProductClickEvent")) {
+         * return ResponseEntity.noContent().build();
+         * }
+         */
+
         ProductClickEvent e = ProductClickEvent.builder()
                 .shopId(shopId)
-                .customerId((String) event.get("client_id"))
+                .clientId((String) event.get("client_id"))
                 .sessionId(sessionId)
                 .productId(productId)
                 .searchId((String) event.get("search_id"))
                 .query((String) event.get("query"))
                 .productTitle((String) event.get("product_title"))
                 .url((String) event.get("url"))
-                .timestampMs(event.get("timestamp") != null ? ((Number) event.get("timestamp")).longValue() : System.currentTimeMillis())
+                .timestampMs(event.get("timestamp") != null ? ((Number) event.get("timestamp")).longValue()
+                        : System.currentTimeMillis())
                 .build();
         log.info("ProductClickEvent recorded: productId {} for session {}", productId, sessionId);
         return ResponseEntity.ok(clickRepo.save(e).getId());

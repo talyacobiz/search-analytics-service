@@ -4,35 +4,53 @@ import javax.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name="purchase_events", indexes = {
-        @Index(name="idx_purchase_shop_time", columnList="shopId, timestampMs"),
-        @Index(name="idx_purchase_session", columnList="sessionId")
+@Table(name = "purchase_events", indexes = {
+        @Index(name = "idx_purchase_shop_time", columnList = "shopId, timestampMs"),
+        @Index(name = "idx_purchase_session", columnList = "sessionId")
 })
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class PurchaseEvent {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable=false)
+    /** Shopify store domain */
+    @Column(nullable = false)
     private String shopId;
 
     @Column
-    private String customerId;
+    private String clientId;
 
-    @Column(nullable=false)
+    @Column
     private String sessionId;
 
+    /** List of purchased product IDs */
     @ElementCollection
-    @CollectionTable(name="purchase_products", joinColumns=@JoinColumn(name="purchase_event_id"))
-    @Column(name="productId")
+    @CollectionTable(name = "purchase_products", joinColumns = @JoinColumn(name = "purchase_event_id"))
+    @Column(name = "productId")
     private java.util.List<String> productIds;
 
-    @Column(nullable=false)
+    /** Total order value in currency */
+    @Column(nullable = false)
     private Double totalAmount;
 
+    /** ISO currency code (ILS, USD, etc.) */
     @Column
     private String currency;
 
-    @Column(nullable=false)
+    /** Comma-separated product titles */
+    @Column
+    private String productTitles;
+
+    /** Shopify financial status (paid, refunded, etc.) */
+    @Column
+    private String orderStatus;
+
+    /** Unix timestamp (ms) of purchase detection */
+    @Column(nullable = false)
     private Long timestampMs;
 }
