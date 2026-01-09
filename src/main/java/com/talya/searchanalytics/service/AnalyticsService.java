@@ -12,6 +12,8 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +25,7 @@ public class AnalyticsService {
     private final PurchaseEventRepository purchaseRepo;
     private final ProductClickEventRepository clickRepo;
     private final BuyNowClickEventRepository buyNowRepo;
+    private final CurrencyService currencyService;
 
     public AnalyticsSummaryResponse summary(String shopId, long fromMs, long toMs) {
         try {
@@ -34,6 +37,21 @@ public class AnalyticsService {
             long purchases = purchaseRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
         Double totalRevenue = purchaseRepo.sumTotalAmountByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
         if (totalRevenue == null) totalRevenue = 0d;
+        
+        // Calculate purchase value in EUR with currency conversion
+        List<com.talya.searchanalytics.model.PurchaseEvent> purchaseEvents = purchaseRepo.findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
+        Map<String, Double> conversionRatesUsed = new HashMap<>();
+        double totalPurchaseValueEur = 0.0;
+        
+        for (com.talya.searchanalytics.model.PurchaseEvent purchase : purchaseEvents) {
+            if (purchase.getTotalAmount() != null && purchase.getCurrency() != null) {
+                String currency = purchase.getCurrency().toUpperCase();
+                double rate = currencyService.getExchangeRate(currency);
+                conversionRatesUsed.put(currency, rate);
+                totalPurchaseValueEur += currencyService.convertToEur(purchase.getTotalAmount(), currency);
+            }
+        }
+        
         double conv = (searches == 0) ? 0 : (purchases * 100.0 / searches);
 
         // Calculate previous period
@@ -44,6 +62,20 @@ public class AnalyticsService {
         long prevPurchases = purchaseRepo.countByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
         Double prevRevenue = purchaseRepo.sumTotalAmountByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
         if (prevRevenue == null) prevRevenue = 0d;
+        
+        // Calculate previous period purchase value in EUR
+        List<com.talya.searchanalytics.model.PurchaseEvent> prevPurchaseEvents = purchaseRepo.findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
+        double prevPurchaseValueEur = 0.0;
+        
+        for (com.talya.searchanalytics.model.PurchaseEvent purchase : prevPurchaseEvents) {
+            if (purchase.getTotalAmount() != null && purchase.getCurrency() != null) {
+                String currency = purchase.getCurrency().toUpperCase();
+                double rate = currencyService.getExchangeRate(currency);
+                conversionRatesUsed.put(currency, rate);
+                prevPurchaseValueEur += currencyService.convertToEur(purchase.getTotalAmount(), currency);
+            }
+        }
+        
         double prevConv = (prevSearches == 0) ? 0 : (prevPurchases * 100.0 / prevSearches);
 
         // Get all relevant events
@@ -294,6 +326,9 @@ public class AnalyticsService {
                 .prevAddToCartAmount(prevAddToCartAmount)
                 .addToCartAmountChangePercent(addToCartAmountChangePercent)
                 .currency(currency)
+                .totalPurchaseValueEur(totalPurchaseValueEur)
+                .prevPurchaseValueEur(prevPurchaseValueEur)
+                .conversionRatesUsed(conversionRatesUsed)
                 .build();
         } catch (Exception e) {
             log.error("Error calculating analytics summary for shopId: {}", shopId, e);
@@ -322,6 +357,9 @@ public class AnalyticsService {
                     .prevAddToCartAmount(0.0)
                     .addToCartAmountChangePercent(0.0)
                     .currency("NIS")
+                    .totalPurchaseValueEur(0.0)
+                    .prevPurchaseValueEur(0.0)
+                    .conversionRatesUsed(new HashMap<>())
                     .build();
         }
     }
