@@ -28,13 +28,15 @@ public class AnalyticsServiceTest {
     private ProductClickEventRepository clickRepo;
     @Mock
     private BuyNowClickEventRepository buyNowRepo;
+    @Mock
+    private CurrencyService currencyService;
 
     private AnalyticsService service;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        service = new AnalyticsService(searchRepo, cartRepo, purchaseRepo, clickRepo, buyNowRepo);
+        service = new AnalyticsService(searchRepo, cartRepo, purchaseRepo, clickRepo, buyNowRepo, currencyService);
     }
 
     @Test
@@ -45,23 +47,35 @@ public class AnalyticsServiceTest {
         when(purchaseRepo.countByShopIdAndTimestampMsBetween(anyString(), anyLong(), anyLong())).thenReturn(1L);
         when(purchaseRepo.sumTotalAmountByShopIdAndTimestampMsBetween(anyString(), anyLong(), anyLong())).thenReturn(100.0);
         when(searchRepo.topQueries(anyString(), anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        // Mock currency service
+        when(currencyService.getExchangeRate(anyString())).thenReturn(1.0);
+        when(currencyService.convertToEur(anyDouble(), anyString())).thenReturn(100.0);
 
         // Mock for filtering logic: search event and add-to-cart event with matching sessionId/productId
         SearchEvent searchEvent = new SearchEvent();
         searchEvent.setSessionId("sess1");
         searchEvent.setProductIds(List.of("prod1"));
+        
         AddToCartEvent cartEvent = new AddToCartEvent();
         cartEvent.setSessionId("sess1");
         cartEvent.setProductId("prod1");
         cartEvent.setPrice(50.0);
         cartEvent.setCurrency("NIS");
+        
+        PurchaseEvent purchaseEvent = new PurchaseEvent();
+        purchaseEvent.setSessionId("sess1");
+        purchaseEvent.setProductIds(List.of("prod1"));
+        purchaseEvent.setTotalAmount(100.0);
+        purchaseEvent.setCurrency("EUR");
+        
         when(searchRepo.findAllByShopIdAndTimestampMsBetween(anyString(), anyLong(), anyLong())).thenReturn(List.of(searchEvent));
-        when(cartRepo.findAllByShopIdAndTimestampMsBetween(anyString(), anyLong(), anyLong())).thenReturn(List.of(cartEvent, cartEvent));
+        when(cartRepo.findAllByShopIdAndTimestampMsBetween(anyString(), anyLong(), anyLong())).thenReturn(List.of(cartEvent));
+        when(purchaseRepo.findAllByShopIdAndTimestampMsBetween(anyString(), anyLong(), anyLong())).thenReturn(List.of(purchaseEvent));
 
         AnalyticsSummaryResponse s = service.summary("shop1", 0L, System.currentTimeMillis());
         assertNotNull(s);
         assertEquals(10L, s.getTotalSearches());
-        assertEquals(2L, s.getTotalAddToCart());
+        assertEquals(1L, s.getTotalAddToCart());
         assertEquals(1L, s.getTotalPurchases());
         assertEquals(100.0, s.getTotalRevenue());
 

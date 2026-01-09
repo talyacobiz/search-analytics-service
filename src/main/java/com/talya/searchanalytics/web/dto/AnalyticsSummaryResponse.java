@@ -3,6 +3,7 @@ package com.talya.searchanalytics.web.dto;
 
 import lombok.*;
 import java.util.List;
+import java.util.Map;
 
 @Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class AnalyticsSummaryResponse {
@@ -28,6 +29,11 @@ public class AnalyticsSummaryResponse {
     private Double prevAddToCartAmount;
     private Double addToCartAmountChangePercent;
     private String currency;
+    
+    // Purchase value fields
+    private Double totalPurchaseValueEur;
+    private Double purchaseValueChangePercent;
+    private Map<String, Double> conversionRatesUsed;
 
     @Data @NoArgsConstructor @AllArgsConstructor @Builder
     public static class TimePoint {

@@ -51,8 +51,8 @@ public class AnalyticsIsolationTest {
         shopRepo.save(Shop.builder().shopDomain("shopB").passwordHash(enc.encode("passB!123$"))
                 .role(Shop.Role.SHOP).status(Shop.Status.ACTIVE).build());
         long now = Instant.now().toEpochMilli();
-        searchRepo.save(SearchEvent.builder().shopId("shopA").searchId("s1").sessionId("sess1").query("hat").productIds(java.util.List.of()).timestampMs(now).build());
-        searchRepo.save(SearchEvent.builder().shopId("shopB").searchId("s2").sessionId("sess2").query("shoes").productIds(java.util.List.of()).timestampMs(now).build());
+        searchRepo.save(SearchEvent.builder().shopId("shopA").searchId("s1").sessionId("sess1").clientId("client1").query("hat").productIds(java.util.List.of()).timestampMs(now).build());
+        searchRepo.save(SearchEvent.builder().shopId("shopB").searchId("s2").sessionId("sess2").clientId("client2").query("shoes").productIds(java.util.List.of()).timestampMs(now).build());
     }
 
     @Test

@@ -11,7 +11,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +25,7 @@ public class AnalyticsService {
     private final PurchaseEventRepository purchaseRepo;
     private final ProductClickEventRepository clickRepo;
     private final BuyNowClickEventRepository buyNowRepo;
+    private final CurrencyService currencyService;
 
     public AnalyticsSummaryResponse summary(String shopId, long fromMs, long toMs) {
         try {
@@ -98,7 +101,7 @@ public class AnalyticsService {
             double validPurchaseRevenue = 0.0;
 
             log.info(
-                    "🔍 Purchase Filtering Debug for shopId {}: {} total purchase events, {} sessions with cart events",
+                    "Purchase Filtering Debug for shopId {}: {} total purchase events, {} sessions with cart events",
                     shopId, purchaseEvents.size(), sessionCartProducts.size());
 
             for (com.talya.searchanalytics.model.PurchaseEvent pe : purchaseEvents) {
@@ -128,7 +131,7 @@ public class AnalyticsService {
                                 validProductsInThisOrder, pe.getTotalAmount(), pe.getSessionId(), pe.getClientId());
                     } else {
                         log.warn(
-                                "❌ Purchase filtered out: none of {} products were in cart for this session. SessionId: {}, ClientId: {}, ProductIds: {}, Session has cart: {}",
+                                "Purchase filtered out: none of {} products were in cart for this session. SessionId: {}, ClientId: {}, ProductIds: {}, Session has cart: {}",
                                 pe.getProductIds().size(), pe.getSessionId(), pe.getClientId(),
                                 pe.getProductIds(), cartProductsInSession != null);
                     }
@@ -138,7 +141,18 @@ public class AnalyticsService {
             // Use filtered purchase data instead of raw counts
             long purchases = validPurchasedProductCount; // Now counting individual products
             Double totalRevenue = validPurchaseRevenue;
+          // Calculate purchase value in EUR with currency conversion
+          Map<String, Double> conversionRatesUsed = new HashMap<>();
+          double totalPurchaseValueEur = 0.0;
 
+          for (com.talya.searchanalytics.model.PurchaseEvent purchase : purchaseEvents) {
+            if (purchase.getTotalAmount() != null && purchase.getCurrency() != null) {
+              String purchaseCurrency = purchase.getCurrency().toUpperCase();
+              double rate = currencyService.getExchangeRate(purchaseCurrency);
+              conversionRatesUsed.put(purchaseCurrency, rate);
+              totalPurchaseValueEur += currencyService.convertToEur(purchase.getTotalAmount(), purchaseCurrency);
+            }
+          }
             log.info(
                     "Purchase Summary for shopId {}: {} total purchase events, {} valid products purchased, total revenue: {} {}",
                     shopId, purchaseEvents.size(), purchases, String.format("%.2f", totalRevenue), currency);
@@ -330,6 +344,17 @@ public class AnalyticsService {
 
             long prevPurchases = validPrevPurchasedProductCount;
             Double prevRevenue = validPrevPurchaseRevenue;
+            // Calculate previous period purchase value in EUR
+          double prevPurchaseValueEur = 0.0;
+
+          for (com.talya.searchanalytics.model.PurchaseEvent purchase : prevPurchaseEvents) {
+            if (purchase.getTotalAmount() != null && purchase.getCurrency() != null) {
+              String purchaseCurrency = "USD";//purchase.getCurrency().toUpperCase();
+              double rate = currencyService.getExchangeRate(purchaseCurrency);
+              conversionRatesUsed.put(purchaseCurrency, rate);
+              prevPurchaseValueEur += currencyService.convertToEur(purchase.getTotalAmount(), purchaseCurrency);
+            }
+          }
 
             // Calculate previous period Search-to-Purchase Conversion Rate
             // Formula: (Sessions with an Order that included a Search / Total Sessions with
@@ -442,6 +467,7 @@ public class AnalyticsService {
             Double productClicksChange = percentChange(prevProductClicks, productClicks);
             Double buyNowClicksChange = percentChange(prevBuyNowClicks, buyNowClicks);
             Double revenueChange = percentChange(prevRevenue, totalRevenue);
+            Double purchaseValueChangePercent = percentChange(prevPurchaseValueEur, totalPurchaseValueEur);
             Double convChange = percentChange(prevConv, conv);
             Double clickThroughRateChange = percentChange(prevClickThroughRate, clickThroughRate);
 
@@ -541,6 +567,9 @@ public class AnalyticsService {
                     .prevAddToCartAmount(prevAddToCartAmount)
                     .addToCartAmountChangePercent(addToCartAmountChangePercent)
                     .currency(currency)
+                    .totalPurchaseValueEur(totalPurchaseValueEur)
+                    .purchaseValueChangePercent(purchaseValueChangePercent)
+                    .conversionRatesUsed(conversionRatesUsed)
                     .build();
         } catch (Exception e) {
             log.error("Error calculating analytics summary for shopId: {}", shopId, e);
@@ -569,6 +598,9 @@ public class AnalyticsService {
                     .prevAddToCartAmount(0.0)
                     .addToCartAmountChangePercent(0.0)
                     .currency("NIS")
+                    .totalPurchaseValueEur(0.0)
+                    .purchaseValueChangePercent(0.0)
+                    .conversionRatesUsed(new HashMap<>())
                     .build();
         }
     }

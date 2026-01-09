@@ -72,11 +72,11 @@ public class EventController {
         }
         if (!found) {
             log.warn(
-                    "❌ AddToCartEvent REJECTED: productId {} not found in any search results for session {}. Searched {} events.",
+                    "AddToCartEvent REJECTED: productId {} not found in any search results for session {}. Searched {} events.",
                     req.getProductId(), req.getSessionId(), searches.size());
             return ResponseEntity.noContent().build();
         }
-        log.info("✅ AddToCartEvent ACCEPTED: productId {} found in search results", req.getProductId());
+        log.info("AddToCartEvent ACCEPTED: productId {} found in search results", req.getProductId());
         AddToCartEvent e = AddToCartEvent.builder()
                 .shopId(req.getShopId())
                 .clientId(req.getClientId())
@@ -95,7 +95,7 @@ public class EventController {
         try {
             // --- Extract raw Shopify info ---
             String shopId = (String) orderData.get("shopId");
-            log.info("🛍️ Received Shopify order from: {}", shopId);
+            log.info("Received Shopify order from: {}", shopId);
 
             String searchaiUserId = (String) orderData.get("searchai_user_id");
             String searchaiSessionId = (String) orderData.get("searchai_session_id");
@@ -142,7 +142,7 @@ public class EventController {
             return ResponseEntity.ok().build();
 
         } catch (Exception e) {
-            log.error("❌ Error processing Shopify order: {}", e.getMessage(), e);
+            log.error("Error processing Shopify order: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body("Error processing order: " + e.getMessage());
         }
     }
