@@ -28,13 +28,15 @@ public class AnalyticsServiceTest {
     private ProductClickEventRepository clickRepo;
     @Mock
     private BuyNowClickEventRepository buyNowRepo;
+    @Mock
+    private CurrencyService currencyService;
 
     private AnalyticsService service;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        service = new AnalyticsService(searchRepo, cartRepo, purchaseRepo, clickRepo, buyNowRepo);
+        service = new AnalyticsService(searchRepo, cartRepo, purchaseRepo, clickRepo, buyNowRepo, currencyService);
     }
 
     @Test
@@ -45,6 +47,10 @@ public class AnalyticsServiceTest {
         when(purchaseRepo.countByShopIdAndTimestampMsBetween(anyString(), anyLong(), anyLong())).thenReturn(1L);
         when(purchaseRepo.sumTotalAmountByShopIdAndTimestampMsBetween(anyString(), anyLong(), anyLong())).thenReturn(100.0);
         when(searchRepo.topQueries(anyString(), anyLong(), anyLong())).thenReturn(Collections.emptyList());
+        
+        // Mock currency service
+        when(currencyService.getExchangeRate(anyString())).thenReturn(1.0);
+        when(currencyService.convertToEur(anyDouble(), anyString())).thenReturn(100.0);
 
         // Mock for filtering logic: search event and add-to-cart event with matching sessionId/productId
         SearchEvent searchEvent = new SearchEvent();
