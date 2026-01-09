@@ -249,55 +249,21 @@ public class AnalyticsService {
             long buyNowClicks = validBuyNowEvents.size();
             log.info("Valid buy now clicks: {} out of {}", buyNowClicks, buyNowEvents.size());
 
-            // Calculate click-through rate using searches that actually had clicks
-            // Create chronological mapping of searches in each session
-            java.util.Map<String, java.util.List<String>> sessionToSearchIds = new java.util.HashMap<>();
-            for (com.talya.searchanalytics.model.SearchEvent se : searchEvents) {
-                if (se.getSessionId() != null && se.getSearchId() != null) {
-                    sessionToSearchIds.computeIfAbsent(se.getSessionId(), k -> new java.util.ArrayList<>())
-                            .add(se.getSearchId());
-                }
-            }
+            // Calculate click-through rate using sessions that actually had clicks (Shopify approach)
+            // Reuse totalSearchSessions already defined above for conversion rate
 
-            // Sort searches by timestamp to maintain chronological order
-            for (java.util.List<String> searchIds : sessionToSearchIds.values()) {
-                // Assuming searchIds are already in chronological order from the query
-            }
-
-            java.util.Set<String> searchesWithClicks = new java.util.HashSet<>();
-            log.info("Calculating CTR: total searches={}, valid clicks={}", searches, validClickEvents.size());
-
-            // Track how many clicks have been processed per session
-            java.util.Map<String, Integer> sessionClickCount = new java.util.HashMap<>();
+            // Find sessions that had clicks
+            java.util.Set<String> sessionsWithClicks = new java.util.HashSet<>();
+            log.info("Calculating CTR: total sessions={}, valid clicks={}", totalSearchSessions.size(), validClickEvents.size());
 
             for (com.talya.searchanalytics.model.ProductClickEvent e : validClickEvents) {
-                log.debug("Click event - searchId: {}, sessionId: {}, query: {}", e.getSearchId(), e.getSessionId(),
-                        e.getQuery());
-
-                if (e.getSearchId() != null && !e.getSearchId().isEmpty()) {
-                    searchesWithClicks.add(e.getSearchId());
-                } else if (e.getSessionId() != null) {
-                    java.util.List<String> searchIds = sessionToSearchIds.get(e.getSessionId());
-                    if (searchIds != null) {
-                        // Get current click count for this session
-                        int clickCount = sessionClickCount.getOrDefault(e.getSessionId(), 0);
-
-                        // Map this click to the next search in chronological order
-                        if (clickCount < searchIds.size()) {
-                            String searchId = searchIds.get(clickCount);
-                            searchesWithClicks.add(searchId);
-                            log.debug("Mapped click #{} in session {} to search: {}", clickCount + 1, e.getSessionId(),
-                                    searchId);
-                        }
-
-                        // Increment click count for this session
-                        sessionClickCount.put(e.getSessionId(), clickCount + 1);
-                    }
+                if (e.getSessionId() != null) {
+                    sessionsWithClicks.add(e.getSessionId());
                 }
             }
 
-            log.info("Unique searches with clicks: {}", searchesWithClicks.size());
-            double clickThroughRate = (searches == 0) ? 0 : (searchesWithClicks.size() * 100.0 / searches);
+            log.info("Unique sessions with clicks: {}", sessionsWithClicks.size());
+            double clickThroughRate = (totalSearchSessions.size() == 0) ? 0 : (sessionsWithClicks.size() * 100.0 / totalSearchSessions.size());
 
             // Filter add-to-cart events for previous period
             List<com.talya.searchanalytics.model.AddToCartEvent> validPrevCartEvents = new ArrayList<>();
@@ -422,35 +388,18 @@ public class AnalyticsService {
             }
             long prevBuyNowClicks = validPrevBuyNowEvents.size();
 
-            // Calculate previous period click-through rate using same logic
-            java.util.Map<String, java.util.List<String>> prevSessionToSearchIds = new java.util.HashMap<>();
-            for (com.talya.searchanalytics.model.SearchEvent se : prevSearchEvents) {
-                if (se.getSessionId() != null && se.getSearchId() != null) {
-                    prevSessionToSearchIds.computeIfAbsent(se.getSessionId(), k -> new java.util.ArrayList<>())
-                            .add(se.getSearchId());
-                }
-            }
+            // Calculate previous period click-through rate using same session-based logic
+            // Reuse prevTotalSearchSessions already defined above for conversion rate
 
-            java.util.Set<String> prevSearchesWithClicks = new java.util.HashSet<>();
-            java.util.Map<String, Integer> prevSessionClickCount = new java.util.HashMap<>();
+            java.util.Set<String> prevSessionsWithClicks = new java.util.HashSet<>();
 
             for (com.talya.searchanalytics.model.ProductClickEvent e : validPrevClickEvents) {
-                if (e.getSearchId() != null && !e.getSearchId().isEmpty()) {
-                    prevSearchesWithClicks.add(e.getSearchId());
-                } else if (e.getSessionId() != null) {
-                    java.util.List<String> searchIds = prevSessionToSearchIds.get(e.getSessionId());
-                    if (searchIds != null) {
-                        int clickCount = prevSessionClickCount.getOrDefault(e.getSessionId(), 0);
-                        if (clickCount < searchIds.size()) {
-                            String searchId = searchIds.get(clickCount);
-                            prevSearchesWithClicks.add(searchId);
-                        }
-                        prevSessionClickCount.put(e.getSessionId(), clickCount + 1);
-                    }
+                if (e.getSessionId() != null) {
+                    prevSessionsWithClicks.add(e.getSessionId());
                 }
             }
-            double prevClickThroughRate = (prevSearches == 0) ? 0
-                    : (prevSearchesWithClicks.size() * 100.0 / prevSearches);
+            double prevClickThroughRate = (prevTotalSearchSessions.size() == 0) ? 0
+                    : (prevSessionsWithClicks.size() * 100.0 / prevTotalSearchSessions.size());
 
             Double prevAddToCartAmount = validPrevCartEvents.stream()
                     .mapToDouble(ev -> ev.getPrice() != null ? ev.getPrice() : 0d).sum();
