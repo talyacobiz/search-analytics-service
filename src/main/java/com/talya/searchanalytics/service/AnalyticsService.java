@@ -32,504 +32,46 @@ public class AnalyticsService {
         try {
             log.info("Starting analytics summary for shopId: {}, fromMs: {}, toMs: {}", shopId, fromMs, toMs);
 
-            // Count total search events (each search counts separately)
-            long searches = searchRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-
-            // Calculate previous period
+            // Calculate periods
             long periodMs = toMs - fromMs;
             long prevFromMs = fromMs - periodMs;
             long prevToMs = fromMs;
-            long prevSearches = searchRepo.countByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
 
-            // Get all relevant events
-            List<com.talya.searchanalytics.model.SearchEvent> searchEvents = searchRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-            List<com.talya.searchanalytics.model.AddToCartEvent> cartEvents = cartRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-            List<com.talya.searchanalytics.model.ProductClickEvent> clickEvents = clickRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-            List<com.talya.searchanalytics.model.BuyNowClickEvent> buyNowEvents = buyNowRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-            List<com.talya.searchanalytics.model.AddToCartEvent> prevCartEvents = cartRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
-            List<com.talya.searchanalytics.model.ProductClickEvent> prevClickEvents = clickRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
-            List<com.talya.searchanalytics.model.BuyNowClickEvent> prevBuyNowEvents = buyNowRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
-            List<com.talya.searchanalytics.model.SearchEvent> prevSearchEvents = searchRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
-
-            // Helper: sessionId -> list of productIds from searches
-            java.util.Map<String, java.util.Set<String>> sessionProducts = new java.util.HashMap<>();
-            for (com.talya.searchanalytics.model.SearchEvent se : searchEvents) {
-                sessionProducts.computeIfAbsent(se.getSessionId(), k -> new java.util.HashSet<>())
-                        .addAll(se.getProductIds());
-            }
-            java.util.Map<String, java.util.Set<String>> prevSessionProducts = new java.util.HashMap<>();
-            for (com.talya.searchanalytics.model.SearchEvent se : prevSearchEvents) {
-                prevSessionProducts.computeIfAbsent(se.getSessionId(), k -> new java.util.HashSet<>())
-                        .addAll(se.getProductIds());
-            }
-
-            // Filter add-to-cart events for current period
-            List<com.talya.searchanalytics.model.AddToCartEvent> validCartEvents = new ArrayList<>();
-            for (com.talya.searchanalytics.model.AddToCartEvent e : cartEvents) {
-                java.util.Set<String> products = sessionProducts.get(e.getSessionId());
-                if (products != null && products.contains(e.getProductId())) {
-                    validCartEvents.add(e);
-                }
-            }
-            long addToCart = validCartEvents.size();
-            Double totalAddToCartAmount = validCartEvents.stream()
-                    .mapToDouble(ev -> ev.getPrice() != null ? ev.getPrice() : 0d).sum();
-            String currency = validCartEvents.stream().map(com.talya.searchanalytics.model.AddToCartEvent::getCurrency)
-                    .filter(c -> c != null && !c.isEmpty()).findFirst().orElse("NIS");
-            
-            log.info("STEP 1 - Add-to-Cart Filtering: {} valid out of {} total events, total amount: {} {}", 
-                    addToCart, cartEvents.size(), String.format("%.2f", totalAddToCartAmount), currency);
-
-            // Build map of sessionId -> set of product IDs that were added to cart
-            // This ensures we only count purchases where the product was added to cart in
-            // the SAME session
-            java.util.Map<String, java.util.Set<String>> sessionCartProducts = new java.util.HashMap<>();
-            for (com.talya.searchanalytics.model.AddToCartEvent e : validCartEvents) {
-                sessionCartProducts.computeIfAbsent(e.getSessionId(), k -> new java.util.HashSet<>())
-                        .add(e.getProductId());
-            }
-
-            // Filter purchase events - count each product that was added to cart IN THE
-            // SAME SESSION
-            List<com.talya.searchanalytics.model.PurchaseEvent> purchaseEvents = purchaseRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-            long validPurchasedProductCount = 0; // Count individual products, not orders
-            double validPurchaseRevenue = 0.0;
-            
-            // Calculate purchase value in EUR with currency conversion (reuse existing filtering)
+            // Get current and previous period analytics
             Map<String, Double> conversionRatesUsed = new HashMap<>();
-            double totalPurchaseValueEur = 0.0;
+            PeriodAnalytics currentPeriod = calculatePeriodAnalytics(shopId, fromMs, toMs, conversionRatesUsed);
+            PeriodAnalytics previousPeriod = calculatePeriodAnalytics(shopId, prevFromMs, prevToMs, conversionRatesUsed);
 
-            log.info(
-                    "Purchase Filtering Debug for shopId {}: {} total purchase events, {} sessions with cart events",
-                    shopId, purchaseEvents.size(), sessionCartProducts.size());
+            // Calculate percentage changes
+            Double searchesChange = percentChange(searchRepo.countByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs), 
+                                                 searchRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs));
+            Double addToCartChange = percentChange(previousPeriod.addToCartCount, currentPeriod.addToCartCount);
+            Double purchasesChange = percentChange(previousPeriod.validPurchasedProductCount, currentPeriod.validPurchasedProductCount);
+            Double productClicksChange = percentChange(previousPeriod.productClicks, currentPeriod.productClicks);
+            Double buyNowClicksChange = percentChange(previousPeriod.buyNowClicks, currentPeriod.buyNowClicks);
+            Double revenueChange = percentChange(previousPeriod.validPurchaseRevenue, currentPeriod.validPurchaseRevenue);
+            Double purchaseValueChangePercent = percentChange(previousPeriod.totalPurchaseValueEur, currentPeriod.totalPurchaseValueEur);
+            Double convChange = percentChange(calculateConversionRate(previousPeriod), calculateConversionRate(currentPeriod));
+            Double clickThroughRateChange = percentChange(calculateClickThroughRate(previousPeriod), calculateClickThroughRate(currentPeriod));
+            Double addToCartAmountChangePercent = percentChange(previousPeriod.addToCartAmount, currentPeriod.addToCartAmount);
 
-            for (com.talya.searchanalytics.model.PurchaseEvent pe : purchaseEvents) {
-                if (pe.getProducts() != null && pe.getSessionId() != null) {
+            // Generate time series
+            List<AnalyticsSummaryResponse.TimePoint> series = generateTimeSeries(shopId, fromMs, toMs, currentPeriod.currency);
 
-                    // Get the cart products for THIS session
-                    java.util.Set<String> cartProductsInSession = sessionCartProducts.get(pe.getSessionId());
-
-                    // Count valid products and check if we have product prices
-                    int validProductsInThisOrder = 0;
-                    boolean hasProductPrices = false;
-                    
-                    for (Product product : pe.getProducts()) {
-                        boolean inCartInSameSession = cartProductsInSession != null &&
-                                cartProductsInSession.contains(product.getProductId());
-
-                        if (inCartInSameSession) {
-                            validPurchasedProductCount++;
-                            validProductsInThisOrder++;
-                            
-                            if (product.getPrice() != null) {
-                                hasProductPrices = true;
-                                double productTotal = product.getPrice() * (product.getAmount() != null ? product.getAmount() : 1);
-                                
-                                if (pe.getCurrency() != null) {
-                                    String purchaseCurrency = pe.getCurrency().toUpperCase();
-                                    double rate = currencyService.getExchangeRate(purchaseCurrency);
-                                    conversionRatesUsed.put(purchaseCurrency, rate);
-                                    double eurAmount = currencyService.convertToEur(productTotal, purchaseCurrency);
-                                    totalPurchaseValueEur += eurAmount;
-                                    validPurchaseRevenue += eurAmount;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Fallback: if no product prices available, use proportional amount from totalAmount
-                    if (validProductsInThisOrder > 0 && !hasProductPrices && pe.getTotalAmount() != null) {
-                        double proportionalAmount = (pe.getTotalAmount() * validProductsInThisOrder) / pe.getProducts().size();
-                        
-                        if (pe.getCurrency() != null) {
-                            String purchaseCurrency = pe.getCurrency().toUpperCase();
-                            double rate = currencyService.getExchangeRate(purchaseCurrency);
-                            conversionRatesUsed.put(purchaseCurrency, rate);
-                            double eurAmount = currencyService.convertToEur(proportionalAmount, purchaseCurrency);
-                            totalPurchaseValueEur += eurAmount;
-                            validPurchaseRevenue += eurAmount;
-                        }
-                    }
-                }
-            }
-
-            // Use filtered purchase data
-            long purchases = validPurchasedProductCount;
-            Double totalRevenue = validPurchaseRevenue;
-            
-            log.info("STEP 2 - Purchase Processing Complete: {} valid products from {} orders, EUR revenue: {}, fallback used for historical data", 
-                    purchases, purchaseEvents.size(), String.format("%.2f", totalPurchaseValueEur));
-            
-            log.info("Total purchase value in EUR: {} (from {} valid products)", totalPurchaseValueEur, validPurchasedProductCount);
-            log.info(
-                    "Purchase Summary for shopId {}: {} total purchase events, {} valid products purchased, total revenue: {} {}",
-                    shopId, purchaseEvents.size(), purchases, String.format("%.2f", totalRevenue), currency);
-
-            // Calculate Search-to-Purchase Conversion Rate
-            // Formula: (Sessions with an Order that included a Search / Total Sessions with
-            // a Search) × 100
-
-            // Get total unique sessions that had searches
-            java.util.Set<String> totalSearchSessions = new java.util.HashSet<>();
-            for (com.talya.searchanalytics.model.SearchEvent se : searchEvents) {
-                if (se.getSessionId() != null) {
-                    totalSearchSessions.add(se.getSessionId());
-                }
-            }
-
-            // Find sessions that had both a search AND a purchase (with valid cart
-            // products)
-            java.util.Set<String> sessionsWithPurchases = new java.util.HashSet<>();
-
-            for (com.talya.searchanalytics.model.PurchaseEvent pe : purchaseEvents) {
-                if (pe.getProducts() != null && pe.getSessionId() != null) {
-                    // Check if this session had searches
-                    if (!totalSearchSessions.contains(pe.getSessionId())) {
-                        continue; // Skip purchases from sessions without searches
-                    }
-
-                    // Check if any purchased product was in the cart for THIS session
-                    java.util.Set<String> cartProductsInSession = sessionCartProducts.get(pe.getSessionId());
-                    boolean hasValidProduct = false;
-
-                    if (cartProductsInSession != null) {
-                        for (Product product : pe.getProducts()) {
-                            if (cartProductsInSession.contains(product.getProductId())) {
-                                hasValidProduct = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (hasValidProduct) {
-                        sessionsWithPurchases.add(pe.getSessionId());
-                    }
-                }
-            }
-
-            // Conversion Rate = (Sessions with Purchase / Total Search Sessions) × 100
-            double conv = (totalSearchSessions.size() == 0) ? 0
-                    : (sessionsWithPurchases.size() * 100.0 / totalSearchSessions.size());
-            
-            log.info("STEP 3 - Conversion Rate Calculated: {}/{} sessions converted = {:.2f}%",
-                    sessionsWithPurchases.size(), totalSearchSessions.size(), conv);
-
-            // Filter product click events for current period
-            List<com.talya.searchanalytics.model.ProductClickEvent> validClickEvents = new ArrayList<>();
-            log.info("Processing {} product click events for shopId: {}", clickEvents.size(), shopId);
-            for (com.talya.searchanalytics.model.ProductClickEvent e : clickEvents) {
-                java.util.Set<String> products = sessionProducts.get(e.getSessionId());
-
-                // Session-based validation: if session has search results and product ID is
-                // valid format, allow it
-                if (products != null && e.getProductId() != null
-                        && e.getProductId().startsWith("gid://shopify/Product/")) {
-                    validClickEvents.add(e);
-                }
-            }
-            long productClicks = validClickEvents.size();
-            log.info("STEP 4 - Click Events Processed: {} valid out of {} total clicks", productClicks, clickEvents.size());
-
-            // Filter buy now events for current period
-            List<com.talya.searchanalytics.model.BuyNowClickEvent> validBuyNowEvents = new ArrayList<>();
-            log.info("Processing {} buy now events for shopId: {}", buyNowEvents.size(), shopId);
-            for (com.talya.searchanalytics.model.BuyNowClickEvent e : buyNowEvents) {
-                java.util.Set<String> products = sessionProducts.get(e.getSessionId());
-                log.debug("BuyNow - sessionId: {}, productId: {}, hasSession: {}", e.getSessionId(), e.getProductId(),
-                        products != null);
-
-                // Session-based validation: if session has search results and product ID is
-                // valid format, allow it
-                if (products != null && e.getProductId() != null
-                        && e.getProductId().startsWith("gid://shopify/Product/")) {
-                    validBuyNowEvents.add(e);
-                    log.debug("BuyNow - VALID: sessionId: {}, productId: {}", e.getSessionId(), e.getProductId());
-                } else {
-                    log.debug("BuyNow - INVALID: sessionId: {}, productId: {}, hasSession: {}", e.getSessionId(),
-                            e.getProductId(), products != null);
-                }
-            }
-            long buyNowClicks = validBuyNowEvents.size();
-            log.info("STEP 5 - Buy Now Events Processed: {} valid out of {} total buy now clicks", buyNowClicks, buyNowEvents.size());
-
-            // Calculate click-through rate using sessions that actually had clicks (Shopify approach)
-            // Reuse totalSearchSessions already defined above for conversion rate
-
-            // Find sessions that had clicks
-            java.util.Set<String> sessionsWithClicks = new java.util.HashSet<>();
-            log.info("Calculating CTR: total sessions={}, valid clicks={}", totalSearchSessions.size(), validClickEvents.size());
-
-            for (com.talya.searchanalytics.model.ProductClickEvent e : validClickEvents) {
-                if (e.getSessionId() != null) {
-                    sessionsWithClicks.add(e.getSessionId());
-                }
-            }
-
-            log.info("Unique sessions with clicks: {}", sessionsWithClicks.size());
-            double clickThroughRate = (totalSearchSessions.size() == 0) ? 0 : (sessionsWithClicks.size() * 100.0 / totalSearchSessions.size());
-            
-            log.info("STEP 6 - Click-Through Rate Calculated: {}/{} sessions with clicks = {:.2f}%", 
-                    sessionsWithClicks.size(), totalSearchSessions.size(), clickThroughRate);
-
-            // Filter add-to-cart events for previous period
-            List<com.talya.searchanalytics.model.AddToCartEvent> validPrevCartEvents = new ArrayList<>();
-            for (com.talya.searchanalytics.model.AddToCartEvent e : prevCartEvents) {
-                java.util.Set<String> products = prevSessionProducts.get(e.getSessionId());
-                if (products != null && products.contains(e.getProductId())) {
-                    validPrevCartEvents.add(e);
-                }
-            }
-
-            // Build map of sessionId -> set of product IDs for previous period
-            java.util.Map<String, java.util.Set<String>> prevSessionCartProducts = new java.util.HashMap<>();
-            for (com.talya.searchanalytics.model.AddToCartEvent e : validPrevCartEvents) {
-                prevSessionCartProducts.computeIfAbsent(e.getSessionId(), k -> new java.util.HashSet<>())
-                        .add(e.getProductId());
-            }
-
-            // Filter previous period purchase events - count each product IN THE SAME
-            // SESSION
-            List<com.talya.searchanalytics.model.PurchaseEvent> prevPurchaseEvents = purchaseRepo
-                    .findAllByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs);
-            long validPrevPurchasedProductCount = 0; // Count individual products
-            double validPrevPurchaseRevenue = 0.0;
-
-            for (com.talya.searchanalytics.model.PurchaseEvent pe : prevPurchaseEvents) {
-                if (pe.getProducts() != null && pe.getSessionId() != null) {
-                    // Get the cart products for THIS session
-                    java.util.Set<String> cartProductsInSession = prevSessionCartProducts.get(pe.getSessionId());
-
-                    if (cartProductsInSession != null) {
-                        for (Product product : pe.getProducts()) {
-                            if (cartProductsInSession.contains(product.getProductId())) {
-                                validPrevPurchasedProductCount++;
-                                
-                                if (product.getPrice() != null) {
-                                    double productTotal = product.getPrice() * (product.getAmount() != null ? product.getAmount() : 1);
-                                    validPrevPurchaseRevenue += productTotal;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            long prevPurchases = validPrevPurchasedProductCount;
-            Double prevRevenue = validPrevPurchaseRevenue;
-            // Calculate previous period purchase value in EUR (only from search sessions)
-            double prevPurchaseValueEur = 0.0;
-
-            // Use the same filtering logic as validPrevPurchaseRevenue
-            for (com.talya.searchanalytics.model.PurchaseEvent pe : prevPurchaseEvents) {
-                if (pe.getProducts() != null && pe.getSessionId() != null && pe.getCurrency() != null) {
-                    // Get the cart products for THIS session
-                    java.util.Set<String> cartProductsInSession = prevSessionCartProducts.get(pe.getSessionId());
-                    
-                    if (cartProductsInSession != null) {
-                        for (Product product : pe.getProducts()) {
-                            if (cartProductsInSession.contains(product.getProductId()) && product.getPrice() != null) {
-                                double productTotal = product.getPrice() * (product.getAmount() != null ? product.getAmount() : 1);
-                                String purchaseCurrency = pe.getCurrency().toUpperCase();
-                                double rate = currencyService.getExchangeRate(purchaseCurrency);
-                                conversionRatesUsed.put(purchaseCurrency, rate);
-                                prevPurchaseValueEur += currencyService.convertToEur(productTotal, purchaseCurrency);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Calculate previous period Search-to-Purchase Conversion Rate
-            // Formula: (Sessions with an Order that included a Search / Total Sessions with
-            // a Search) × 100
-
-            // Get total unique sessions that had searches in previous period
-            java.util.Set<String> prevTotalSearchSessions = new java.util.HashSet<>();
-            for (com.talya.searchanalytics.model.SearchEvent se : prevSearchEvents) {
-                if (se.getSessionId() != null) {
-                    prevTotalSearchSessions.add(se.getSessionId());
-                }
-            }
-
-            // Find sessions that had both a search AND a purchase (with valid cart
-            // products)
-            java.util.Set<String> prevSessionsWithPurchases = new java.util.HashSet<>();
-
-            for (com.talya.searchanalytics.model.PurchaseEvent pe : prevPurchaseEvents) {
-                if (pe.getProducts() != null && pe.getSessionId() != null) {
-                    // Check if this session had searches
-                    if (!prevTotalSearchSessions.contains(pe.getSessionId())) {
-                        continue; // Skip purchases from sessions without searches
-                    }
-
-                    // Check if any purchased product was in the cart for THIS session
-                    java.util.Set<String> cartProductsInSession = prevSessionCartProducts.get(pe.getSessionId());
-                    boolean hasValidProduct = false;
-
-                    if (cartProductsInSession != null) {
-                        for (Product product : pe.getProducts()) {
-                            if (cartProductsInSession.contains(product.getProductId())) {
-                                hasValidProduct = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (hasValidProduct) {
-                        prevSessionsWithPurchases.add(pe.getSessionId());
-                    }
-                }
-            }
-
-            double prevConv = (prevTotalSearchSessions.size() == 0) ? 0
-                    : (prevSessionsWithPurchases.size() * 100.0 / prevTotalSearchSessions.size());
-
-            // Filter previous period events
-            List<com.talya.searchanalytics.model.ProductClickEvent> validPrevClickEvents = new ArrayList<>();
-            for (com.talya.searchanalytics.model.ProductClickEvent e : prevClickEvents) {
-                java.util.Set<String> products = prevSessionProducts.get(e.getSessionId());
-                if (products != null && e.getProductId() != null
-                        && e.getProductId().startsWith("gid://shopify/Product/")) {
-                    validPrevClickEvents.add(e);
-                }
-            }
-            long prevProductClicks = validPrevClickEvents.size();
-
-            List<com.talya.searchanalytics.model.BuyNowClickEvent> validPrevBuyNowEvents = new ArrayList<>();
-            for (com.talya.searchanalytics.model.BuyNowClickEvent e : prevBuyNowEvents) {
-                java.util.Set<String> products = prevSessionProducts.get(e.getSessionId());
-                if (products != null && e.getProductId() != null
-                        && e.getProductId().startsWith("gid://shopify/Product/")) {
-                    validPrevBuyNowEvents.add(e);
-                }
-            }
-            long prevBuyNowClicks = validPrevBuyNowEvents.size();
-
-            // Calculate previous period click-through rate using same session-based logic
-            // Reuse prevTotalSearchSessions already defined above for conversion rate
-
-            java.util.Set<String> prevSessionsWithClicks = new java.util.HashSet<>();
-
-            for (com.talya.searchanalytics.model.ProductClickEvent e : validPrevClickEvents) {
-                if (e.getSessionId() != null) {
-                    prevSessionsWithClicks.add(e.getSessionId());
-                }
-            }
-            double prevClickThroughRate = (prevTotalSearchSessions.size() == 0) ? 0
-                    : (prevSessionsWithClicks.size() * 100.0 / prevTotalSearchSessions.size());
-
-            Double prevAddToCartAmount = validPrevCartEvents.stream()
-                    .mapToDouble(ev -> ev.getPrice() != null ? ev.getPrice() : 0d).sum();
-            if (totalAddToCartAmount == null)
-                totalAddToCartAmount = 0d;
-            if (prevAddToCartAmount == null)
-                prevAddToCartAmount = 0d;
-            Double addToCartAmountChangePercent = percentChange(prevAddToCartAmount, totalAddToCartAmount);
-
-            // Calculate percentage change
-            Double searchesChange = percentChange(prevSearches, searches);
-            Double addToCartChange = percentChange(validPrevCartEvents.size(), addToCart);
-            Double purchasesChange = percentChange(prevPurchases, purchases);
-            Double productClicksChange = percentChange(prevProductClicks, productClicks);
-            Double buyNowClicksChange = percentChange(prevBuyNowClicks, buyNowClicks);
-            Double revenueChange = percentChange(prevRevenue, totalRevenue);
-            Double purchaseValueChangePercent = percentChange(prevPurchaseValueEur, totalPurchaseValueEur);
-            Double convChange = percentChange(prevConv, conv);
-            Double clickThroughRateChange = percentChange(prevClickThroughRate, clickThroughRate);
-
-            // Aggregate time series data
-            List<AnalyticsSummaryResponse.TimePoint> series = new ArrayList<>();
-            LocalDate start = Instant.ofEpochMilli(fromMs).atZone(ZoneOffset.UTC).toLocalDate();
-            LocalDate end = Instant.ofEpochMilli(toMs).atZone(ZoneOffset.UTC).toLocalDate();
-            for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
-                long dayStartMs = d.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-                long dayEndMs = d.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() - 1;
-                int daySearches = (int) searchRepo.countByShopIdAndTimestampMsBetween(shopId, dayStartMs, dayEndMs);
-
-                // Filter add-to-cart events for this day
-                List<com.talya.searchanalytics.model.AddToCartEvent> dayCartEvents = cartRepo
-                        .findAllByShopIdAndTimestampMsBetween(shopId, dayStartMs, dayEndMs);
-                List<com.talya.searchanalytics.model.SearchEvent> daySearchEvents = searchRepo
-                        .findAllByShopIdAndTimestampMsBetween(shopId, dayStartMs, dayEndMs);
-                java.util.Map<String, java.util.Set<String>> daySessionProducts = new java.util.HashMap<>();
-                for (com.talya.searchanalytics.model.SearchEvent se : daySearchEvents) {
-                    daySessionProducts.computeIfAbsent(se.getSessionId(), k -> new java.util.HashSet<>())
-                            .addAll(se.getProductIds());
-                }
-                List<com.talya.searchanalytics.model.AddToCartEvent> validDayCartEvents = new ArrayList<>();
-                for (com.talya.searchanalytics.model.AddToCartEvent e : dayCartEvents) {
-                    java.util.Set<String> products = daySessionProducts.get(e.getSessionId());
-                    if (products != null && products.contains(e.getProductId())) {
-                        validDayCartEvents.add(e);
-                    }
-                }
-                int dayAddToCart = validDayCartEvents.size();
-
-                // Build map of sessionId -> set of product IDs for this day
-                java.util.Map<String, java.util.Set<String>> daySessionCartProducts = new java.util.HashMap<>();
-                for (com.talya.searchanalytics.model.AddToCartEvent e : validDayCartEvents) {
-                    daySessionCartProducts.computeIfAbsent(e.getSessionId(), k -> new java.util.HashSet<>())
-                            .add(e.getProductId());
-                }
-
-                // Filter purchase events for this day - count each product IN THE SAME SESSION
-                List<com.talya.searchanalytics.model.PurchaseEvent> dayPurchaseEvents = purchaseRepo
-                        .findAllByShopIdAndTimestampMsBetween(shopId, dayStartMs, dayEndMs);
-                long dayValidPurchasedProductCount = 0;
-
-                for (com.talya.searchanalytics.model.PurchaseEvent pe : dayPurchaseEvents) {
-                    if (pe.getProducts() != null && pe.getSessionId() != null) {
-                        java.util.Set<String> cartProductsInSession = daySessionCartProducts.get(pe.getSessionId());
-                        if (cartProductsInSession != null) {
-                            for (Product product : pe.getProducts()) {
-                                if (cartProductsInSession.contains(product.getProductId())) {
-                                    dayValidPurchasedProductCount++;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                int dayPurchases = (int) dayValidPurchasedProductCount;
-
-                Double dayAddToCartAmount = validDayCartEvents.stream()
-                        .mapToDouble(ev -> ev.getPrice() != null ? ev.getPrice() : 0d).sum();
-                String dayCurrency = validDayCartEvents.stream()
-                        .map(com.talya.searchanalytics.model.AddToCartEvent::getCurrency)
-                        .filter(c -> c != null && !c.isEmpty()).findFirst().orElse(currency);
-                series.add(AnalyticsSummaryResponse.TimePoint.builder()
-                        .date(d.toString()).searches(daySearches).addToCart(dayAddToCart).purchases(dayPurchases)
-                        .addToCartAmount(dayAddToCartAmount).currency(dayCurrency).build());
-            }
-
-            List<Object[]> rows = searchRepo.topQueries(shopId, fromMs, toMs);
-            List<AnalyticsSummaryResponse.TopQuery> tq = new ArrayList<>();
-            for (Object[] r : rows) {
-                String term = (String) r[0];
-                long cnt = (r[1] instanceof Long) ? (Long) r[1] : ((Number) r[1]).longValue();
-                tq.add(new AnalyticsSummaryResponse.TopQuery(term, cnt));
-            }
+            // Get top queries
+            List<AnalyticsSummaryResponse.TopQuery> topQueries = getTopQueries(shopId, fromMs, toMs);
 
             return AnalyticsSummaryResponse.builder()
-                    .totalSearches(searches)
-                    .totalAddToCart(addToCart)
-                    .totalPurchases(purchases)
-                    .totalProductClicks(productClicks)
-                    .totalBuyNowClicks(buyNowClicks)
-                    .totalRevenue(totalRevenue)
-                    .conversionRate(Math.round(conv * 10.0) / 10.0)
-                    .clickThroughRate(Math.round(clickThroughRate * 10.0) / 10.0)
+                    .totalSearches(searchRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs))
+                    .totalAddToCart(currentPeriod.addToCartCount)
+                    .totalPurchases(currentPeriod.validPurchasedProductCount)
+                    .totalProductClicks(currentPeriod.productClicks)
+                    .totalBuyNowClicks(currentPeriod.buyNowClicks)
+                    .totalRevenue(currentPeriod.validPurchaseRevenue)
+                    .conversionRate(Math.round(calculateConversionRate(currentPeriod) * 10.0) / 10.0)
+                    .clickThroughRate(Math.round(calculateClickThroughRate(currentPeriod) * 10.0) / 10.0)
                     .timeSeries(series)
-                    .topQueries(tq)
+                    .topQueries(topQueries)
                     .searchesChangePercent(searchesChange)
                     .addToCartChangePercent(addToCartChange)
                     .purchasesChangePercent(purchasesChange)
@@ -538,45 +80,17 @@ public class AnalyticsService {
                     .revenueChangePercent(revenueChange)
                     .conversionRateChangePercent(convChange)
                     .clickThroughRateChangePercent(clickThroughRateChange)
-                    .totalAddToCartAmount(totalAddToCartAmount)
-                    .prevAddToCartAmount(prevAddToCartAmount)
+                    .totalAddToCartAmount(currentPeriod.addToCartAmount)
+                    .prevAddToCartAmount(previousPeriod.addToCartAmount)
                     .addToCartAmountChangePercent(addToCartAmountChangePercent)
-                    .currency(currency)
-                    .totalPurchaseValueEur(totalPurchaseValueEur)
+                    .currency(currentPeriod.currency)
+                    .totalPurchaseValueEur(currentPeriod.totalPurchaseValueEur)
                     .purchaseValueChangePercent(purchaseValueChangePercent)
                     .conversionRatesUsed(conversionRatesUsed)
                     .build();
         } catch (Exception e) {
             log.error("Error calculating analytics summary for shopId: {}", shopId, e);
-
-            // Return safe default response
-            return AnalyticsSummaryResponse.builder()
-                    .totalSearches(0L)
-                    .totalAddToCart(0L)
-                    .totalPurchases(0L)
-                    .totalProductClicks(0L)
-                    .totalBuyNowClicks(0L)
-                    .totalRevenue(0.0)
-                    .conversionRate(0.0)
-                    .clickThroughRate(0.0)
-                    .timeSeries(new ArrayList<>())
-                    .topQueries(new ArrayList<>())
-                    .searchesChangePercent(0.0)
-                    .addToCartChangePercent(0.0)
-                    .purchasesChangePercent(0.0)
-                    .productClicksChangePercent(0.0)
-                    .buyNowClicksChangePercent(0.0)
-                    .revenueChangePercent(0.0)
-                    .conversionRateChangePercent(0.0)
-                    .clickThroughRateChangePercent(0.0)
-                    .totalAddToCartAmount(0.0)
-                    .prevAddToCartAmount(0.0)
-                    .addToCartAmountChangePercent(0.0)
-                    .currency("NIS")
-                    .totalPurchaseValueEur(0.0)
-                    .purchaseValueChangePercent(0.0)
-                    .conversionRatesUsed(new HashMap<>())
-                    .build();
+            return createDefaultResponse();
         }
     }
 
@@ -589,12 +103,17 @@ public class AnalyticsService {
         double addToCartAmount = 0.0;
         long productClicks = 0;
         long buyNowClicks = 0;
+        String currency = "NIS";
         java.util.Set<String> totalSearchSessions = new java.util.HashSet<>();
         java.util.Set<String> sessionsWithPurchases = new java.util.HashSet<>();
         java.util.Set<String> sessionsWithClicks = new java.util.HashSet<>();
     }
 
     private PeriodAnalytics calculatePeriodAnalytics(String shopId, long fromMs, long toMs, Map<String, Double> conversionRatesUsed) {
+        return calculatePeriodAnalytics(shopId, fromMs, toMs, conversionRatesUsed, true);
+    }
+    
+    private PeriodAnalytics calculatePeriodAnalytics(String shopId, long fromMs, long toMs, Map<String, Double> conversionRatesUsed, boolean enableLogging) {
         PeriodAnalytics analytics = new PeriodAnalytics();
         
         // Get all events for this period
@@ -623,6 +142,8 @@ public class AnalyticsService {
         }
         analytics.addToCartCount = validCartEvents.size();
         analytics.addToCartAmount = validCartEvents.stream().mapToDouble(ev -> ev.getPrice() != null ? ev.getPrice() : 0d).sum();
+        analytics.currency = validCartEvents.stream().map(com.talya.searchanalytics.model.AddToCartEvent::getCurrency)
+                .filter(c -> c != null && !c.isEmpty()).findFirst().orElse("NIS");
         
         // Build session cart products map
         java.util.Map<String, java.util.Set<String>> sessionCartProducts = new java.util.HashMap<>();
@@ -630,20 +151,25 @@ public class AnalyticsService {
             sessionCartProducts.computeIfAbsent(e.getSessionId(), k -> new java.util.HashSet<>()).add(e.getProductId());
         }
         
-        // Filter and calculate purchase metrics
+        // Filter and calculate purchase metrics with fallback logic
+        int fallbackOrdersCount = 0;
         for (com.talya.searchanalytics.model.PurchaseEvent pe : purchaseEvents) {
             if (pe.getProducts() != null && pe.getSessionId() != null) {
                 java.util.Set<String> cartProductsInSession = sessionCartProducts.get(pe.getSessionId());
                 
+                int validProductsInThisOrder = 0;
+                boolean hasProductPrices = false;
+                
                 for (Product product : pe.getProducts()) {
                     if (cartProductsInSession != null && cartProductsInSession.contains(product.getProductId())) {
                         analytics.validPurchasedProductCount++;
+                        validProductsInThisOrder++;
                         
                         if (product.getPrice() != null) {
+                            hasProductPrices = true;
                             double productTotal = product.getPrice() * (product.getAmount() != null ? product.getAmount() : 1);
                             analytics.validPurchaseRevenue += productTotal;
                             
-                            // Add EUR conversion
                             if (pe.getCurrency() != null) {
                                 String purchaseCurrency = pe.getCurrency().toUpperCase();
                                 double rate = currencyService.getExchangeRate(purchaseCurrency);
@@ -654,17 +180,23 @@ public class AnalyticsService {
                     }
                 }
                 
-                // Track sessions with purchases if any product was valid
-                boolean hasValidProduct = false;
-                if (cartProductsInSession != null) {
-                    for (Product product : pe.getProducts()) {
-                        if (cartProductsInSession.contains(product.getProductId())) {
-                            hasValidProduct = true;
-                            break;
-                        }
+                // Fallback: use proportional amount if no product prices
+                if (validProductsInThisOrder > 0 && !hasProductPrices && pe.getTotalAmount() != null) {
+                    fallbackOrdersCount++;
+                    
+                    double proportionalAmount = (pe.getTotalAmount() * validProductsInThisOrder) / pe.getProducts().size();
+                    analytics.validPurchaseRevenue += proportionalAmount;
+                    
+                    if (pe.getCurrency() != null) {
+                        String purchaseCurrency = pe.getCurrency().toUpperCase();
+                        double rate = currencyService.getExchangeRate(purchaseCurrency);
+                        conversionRatesUsed.put(purchaseCurrency, rate);
+                        analytics.totalPurchaseValueEur += currencyService.convertToEur(proportionalAmount, purchaseCurrency);
                     }
                 }
-                if (hasValidProduct && analytics.totalSearchSessions.contains(pe.getSessionId())) {
+                
+                // Track sessions with purchases
+                if (validProductsInThisOrder > 0 && analytics.totalSearchSessions.contains(pe.getSessionId())) {
                     analytics.sessionsWithPurchases.add(pe.getSessionId());
                 }
             }
@@ -689,7 +221,82 @@ public class AnalyticsService {
             }
         }
         
+        // Log summary with fallback info if used (only when logging is enabled)
+        if (enableLogging) {
+            String logMessage = String.format("Analytics processed - Cart: %d/%d valid, Purchases: %d products (%.2f€), Clicks: %d/%d, BuyNow: %d/%d, Conv: %.1f%%, CTR: %.1f%%",
+                    analytics.addToCartCount, cartEvents.size(),
+                    analytics.validPurchasedProductCount, analytics.totalPurchaseValueEur,
+                    analytics.productClicks, clickEvents.size(),
+                    analytics.buyNowClicks, buyNowEvents.size(),
+                    calculateConversionRate(analytics), calculateClickThroughRate(analytics));
+            
+            if (fallbackOrdersCount > 0) {
+                logMessage += String.format(" [Fallback: %d orders used avg pricing]", fallbackOrdersCount);
+            }
+            
+            log.info(logMessage);
+        }
+        
         return analytics;
+    }
+
+    private double calculateConversionRate(PeriodAnalytics analytics) {
+        return analytics.totalSearchSessions.size() == 0 ? 0 : 
+               (analytics.sessionsWithPurchases.size() * 100.0 / analytics.totalSearchSessions.size());
+    }
+
+    private double calculateClickThroughRate(PeriodAnalytics analytics) {
+        return analytics.totalSearchSessions.size() == 0 ? 0 : 
+               (analytics.sessionsWithClicks.size() * 100.0 / analytics.totalSearchSessions.size());
+    }
+
+    private List<AnalyticsSummaryResponse.TimePoint> generateTimeSeries(String shopId, long fromMs, long toMs, String currency) {
+        List<AnalyticsSummaryResponse.TimePoint> series = new ArrayList<>();
+        LocalDate start = Instant.ofEpochMilli(fromMs).atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDate end = Instant.ofEpochMilli(toMs).atZone(ZoneOffset.UTC).toLocalDate();
+        
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            long dayStartMs = d.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+            long dayEndMs = d.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() - 1;
+            
+            Map<String, Double> dayConversionRates = new HashMap<>();
+            PeriodAnalytics dayAnalytics = calculatePeriodAnalytics(shopId, dayStartMs, dayEndMs, dayConversionRates, false);
+            
+            series.add(AnalyticsSummaryResponse.TimePoint.builder()
+                    .date(d.toString())
+                    .searches((int) searchRepo.countByShopIdAndTimestampMsBetween(shopId, dayStartMs, dayEndMs))
+                    .addToCart((int) dayAnalytics.addToCartCount)
+                    .purchases((int) dayAnalytics.validPurchasedProductCount)
+                    .addToCartAmount(dayAnalytics.addToCartAmount)
+                    .currency(dayAnalytics.currency.isEmpty() ? currency : dayAnalytics.currency)
+                    .build());
+        }
+        return series;
+    }
+
+    private List<AnalyticsSummaryResponse.TopQuery> getTopQueries(String shopId, long fromMs, long toMs) {
+        List<Object[]> rows = searchRepo.topQueries(shopId, fromMs, toMs);
+        List<AnalyticsSummaryResponse.TopQuery> topQueries = new ArrayList<>();
+        for (Object[] r : rows) {
+            String term = (String) r[0];
+            long cnt = (r[1] instanceof Long) ? (Long) r[1] : ((Number) r[1]).longValue();
+            topQueries.add(new AnalyticsSummaryResponse.TopQuery(term, cnt));
+        }
+        return topQueries;
+    }
+
+    private AnalyticsSummaryResponse createDefaultResponse() {
+        return AnalyticsSummaryResponse.builder()
+                .totalSearches(0L).totalAddToCart(0L).totalPurchases(0L)
+                .totalProductClicks(0L).totalBuyNowClicks(0L).totalRevenue(0.0)
+                .conversionRate(0.0).clickThroughRate(0.0)
+                .timeSeries(new ArrayList<>()).topQueries(new ArrayList<>())
+                .searchesChangePercent(0.0).addToCartChangePercent(0.0).purchasesChangePercent(0.0)
+                .productClicksChangePercent(0.0).buyNowClicksChangePercent(0.0).revenueChangePercent(0.0)
+                .conversionRateChangePercent(0.0).clickThroughRateChangePercent(0.0)
+                .totalAddToCartAmount(0.0).prevAddToCartAmount(0.0).addToCartAmountChangePercent(0.0)
+                .currency("NIS").totalPurchaseValueEur(0.0).purchaseValueChangePercent(0.0)
+                .conversionRatesUsed(new HashMap<>()).build();
     }
 
     private Double percentChange(double prev, double curr) {
