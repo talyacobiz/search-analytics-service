@@ -28,11 +28,10 @@ public class PurchaseEvent {
     @Column
     private String sessionId;
 
-    /** List of purchased product IDs */
+    /** List of purchased products */
     @ElementCollection
     @CollectionTable(name = "purchase_products", joinColumns = @JoinColumn(name = "purchase_event_id"))
-    @Column(name = "productId")
-    private java.util.List<String> productIds;
+    private java.util.List<Product> products;
 
     /** Total order value in currency */
     @Column(nullable = false)

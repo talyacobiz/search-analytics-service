@@ -108,18 +108,18 @@ public class EventController {
                     .get("products");
 
             // --- Convert product list ---
-            List<String> productIds = new java.util.ArrayList<>();
-            List<String> productTitles = new java.util.ArrayList<>();
+            List<Product> products_list = new java.util.ArrayList<>();
             double totalAmount = 0.0;
 
             if (products != null) {
                 for (java.util.Map<String, Object> p : products) {
-                    productIds.add(String.valueOf(p.get("product_id")));
-                    productTitles.add((String) p.get("name"));
-
+                    String productId = String.valueOf(p.get("product_id"));
+                    String name = (String) p.get("name");
                     double price = Double.parseDouble(p.get("price").toString());
-                    int qty = Integer.parseInt(p.get("amount").toString());
-                    totalAmount += price * qty;
+                    int amount = Integer.parseInt(p.get("amount").toString());
+                    
+                    products_list.add(new Product(productId, name, price, amount));
+                    totalAmount += price * amount;
                 }
             }
 
@@ -128,8 +128,7 @@ public class EventController {
                     .shopId(shopId)
                     .clientId(searchaiUserId)
                     .sessionId(searchaiSessionId)
-                    .productIds(productIds)
-                    .productTitles(String.join(",", productTitles))
+                    .products(products_list)
                     .totalAmount(totalAmount)
                     .currency(currency)
                     .timestampMs(timestampMs)
@@ -137,7 +136,7 @@ public class EventController {
                     .build();
 
             purchaseRepo.save(purchase);
-            log.info("✅ Saved purchase event for order with {} products", productIds.size());
+            log.info("✅ Saved purchase event for order with {} products", products_list.size());
 
             return ResponseEntity.ok().build();
 

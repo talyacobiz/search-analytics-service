@@ -64,7 +64,8 @@ public class AnalyticsServiceTest {
         
         PurchaseEvent purchaseEvent = new PurchaseEvent();
         purchaseEvent.setSessionId("sess1");
-        purchaseEvent.setProductIds(List.of("prod1"));
+        Product product = new Product("prod1", "Test Product", 100.0, 1);
+        purchaseEvent.setProducts(List.of(product));
         purchaseEvent.setTotalAmount(100.0);
         purchaseEvent.setCurrency("EUR");
         
