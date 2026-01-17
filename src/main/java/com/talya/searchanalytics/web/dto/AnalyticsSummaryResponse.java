@@ -5,7 +5,10 @@ import lombok.*;
 import java.util.List;
 import java.util.Map;
 
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class AnalyticsSummaryResponse {
     private long totalSearches;
     private long totalAddToCart;
@@ -29,13 +32,36 @@ public class AnalyticsSummaryResponse {
     private Double prevAddToCartAmount;
     private Double addToCartAmountChangePercent;
     private String currency;
-    
+
     // Purchase value fields
     private Double totalPurchaseValueEur;
     private Double purchaseValueChangePercent;
     private Map<String, Double> conversionRatesUsed;
 
-    @Data @NoArgsConstructor @AllArgsConstructor @Builder
+    // New session-based metrics
+    private Long sessionsWithClicks;
+    private Long sessionsWithAddToCarts;
+    private Long sessionsWithPurchases;
+    private Long sessionsWithSearches;
+    private Double addToCartRate;
+    private Double sessionsWithClicksChangePercent;
+    private Double sessionsWithAddToCartsChangePercent;
+    private Double sessionsWithPurchasesChangePercent;
+    private Double sessionsWithSearchesChangePercent;
+    private Double addToCartRateChangePercent;
+
+    // Query complexity metrics
+    private Double averageWordsPerQuery;
+    private Double averageWordsPerQueryChangePercent;
+    private Long longQueryCount; // Queries with 4+ words
+    private Double longQueryPercentage; // Percentage of queries with 4+ words
+    private Double longQueryCountChangePercent;
+    private Double longQueryPercentageChangePercent;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class TimePoint {
         private String date;
         private int searches;
@@ -45,7 +71,9 @@ public class AnalyticsSummaryResponse {
         private String currency;
     }
 
-    @Data @NoArgsConstructor @AllArgsConstructor
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class TopQuery {
         private String term;
         private long count;
