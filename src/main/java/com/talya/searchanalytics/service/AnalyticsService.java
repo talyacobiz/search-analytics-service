@@ -28,9 +28,10 @@ public class AnalyticsService {
     private final BuyNowClickEventRepository buyNowRepo;
     private final CurrencyService currencyService;
 
-    public AnalyticsSummaryResponse summary(String shopId, long fromMs, long toMs) {
+    public AnalyticsSummaryResponse summary(String shopId, long fromMs, long toMs, Integer searchGroup) {
         try {
-            log.info("Starting analytics summary for shopId: {}, fromMs: {}, toMs: {}", shopId, fromMs, toMs);
+            log.info("Starting analytics summary for shopId: {}, fromMs: {}, toMs: {}, searchGroup: {}",
+                    shopId, fromMs, toMs, searchGroup);
 
             // Calculate periods
             long periodMs = toMs - fromMs;
@@ -39,14 +40,15 @@ public class AnalyticsService {
 
             // Get current and previous period analytics
             Map<String, Double> conversionRatesUsed = new HashMap<>();
-            PeriodAnalytics currentPeriod = calculatePeriodAnalytics(shopId, fromMs, toMs, conversionRatesUsed);
+            PeriodAnalytics currentPeriod = calculatePeriodAnalytics(shopId, fromMs, toMs, conversionRatesUsed,
+                    searchGroup);
             PeriodAnalytics previousPeriod = calculatePeriodAnalytics(shopId, prevFromMs, prevToMs,
-                    conversionRatesUsed);
+                    conversionRatesUsed, searchGroup);
 
             // Calculate percentage changes
             Double searchesChange = percentChange(
-                    searchRepo.countByShopIdAndTimestampMsBetween(shopId, prevFromMs, prevToMs),
-                    searchRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs));
+                    countSearches(shopId, prevFromMs, prevToMs, searchGroup),
+                    countSearches(shopId, fromMs, toMs, searchGroup));
             Double addToCartChange = percentChange(previousPeriod.addToCartCount, currentPeriod.addToCartCount);
             Double purchasesChange = percentChange(previousPeriod.validPurchasedProductCount,
                     currentPeriod.validPurchasedProductCount);
@@ -80,13 +82,13 @@ public class AnalyticsService {
 
             // Generate time series
             List<AnalyticsSummaryResponse.TimePoint> series = generateTimeSeries(shopId, fromMs, toMs,
-                    currentPeriod.currency);
+                    currentPeriod.currency, searchGroup);
 
             // Get top queries
             List<AnalyticsSummaryResponse.TopQuery> topQueries = getTopQueries(shopId, fromMs, toMs);
 
             return AnalyticsSummaryResponse.builder()
-                    .totalSearches(searchRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs))
+                    .totalSearches(countSearches(shopId, fromMs, toMs, searchGroup))
                     .totalAddToCart(currentPeriod.addToCartCount)
                     .totalPurchases(currentPeriod.validPurchasedProductCount)
                     .totalProductClicks(currentPeriod.productClicks)
@@ -135,6 +137,134 @@ public class AnalyticsService {
         }
     }
 
+    // Helper method to count searches with optional searchGroup filter
+    private long countSearches(String shopId, long fromMs, long toMs, Integer searchGroup) {
+        if (searchGroup != null) {
+            return searchRepo.countByShopIdAndTimestampMsBetweenAndSearchGroup(shopId, fromMs, toMs, searchGroup);
+        }
+        return searchRepo.countByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
+    }
+
+    /**
+     * Compare two search groups (A/B testing)
+     * 
+     * @param shopId Shop identifier
+     * @param fromMs Start timestamp
+     * @param toMs   End timestamp
+     * @param groupA First group to compare (e.g., 0 for Shopify)
+     * @param groupB Second group to compare (e.g., 1 for AI)
+     * @return Comparison response with both summaries and differences
+     */
+    public com.talya.searchanalytics.web.dto.ABTestComparisonResponse compareGroups(
+            String shopId, long fromMs, long toMs, Integer groupA, Integer groupB) {
+
+        log.info("Comparing search groups - shopId: {}, fromMs: {}, toMs: {}, groupA: {}, groupB: {}",
+                shopId, fromMs, toMs, groupA, groupB);
+
+        // Get summaries for both groups
+        AnalyticsSummaryResponse summaryA = summary(shopId, fromMs, toMs, groupA);
+        AnalyticsSummaryResponse summaryB = summary(shopId, fromMs, toMs, groupB);
+
+        // Calculate comparison metrics
+        com.talya.searchanalytics.web.dto.ABTestComparisonResponse.ComparisonMetrics comparison = com.talya.searchanalytics.web.dto.ABTestComparisonResponse.ComparisonMetrics
+                .builder()
+                // Core metrics (percentage difference)
+                .searchesDiff(percentDifference(summaryA.getTotalSearches(), summaryB.getTotalSearches()))
+                .addToCartDiff(percentDifference(summaryA.getTotalAddToCart(), summaryB.getTotalAddToCart()))
+                .purchasesDiff(percentDifference(summaryA.getTotalPurchases(), summaryB.getTotalPurchases()))
+                .productClicksDiff(
+                        percentDifference(summaryA.getTotalProductClicks(), summaryB.getTotalProductClicks()))
+                .buyNowClicksDiff(percentDifference(summaryA.getTotalBuyNowClicks(), summaryB.getTotalBuyNowClicks()))
+                .revenueDiff(percentDifference(summaryA.getTotalRevenue(), summaryB.getTotalRevenue()))
+
+                // Rate metrics (absolute difference in percentage points)
+                .conversionRateDiff(absoluteDifference(summaryA.getConversionRate(), summaryB.getConversionRate()))
+                .clickThroughRateDiff(
+                        absoluteDifference(summaryA.getClickThroughRate(), summaryB.getClickThroughRate()))
+                .addToCartRateDiff(absoluteDifference(summaryA.getAddToCartRate(), summaryB.getAddToCartRate()))
+
+                // Session metrics
+                .sessionsWithClicksDiff(
+                        percentDifference(summaryA.getSessionsWithClicks(), summaryB.getSessionsWithClicks()))
+                .sessionsWithAddToCartsDiff(
+                        percentDifference(summaryA.getSessionsWithAddToCarts(), summaryB.getSessionsWithAddToCarts()))
+                .sessionsWithPurchasesDiff(
+                        percentDifference(summaryA.getSessionsWithPurchases(), summaryB.getSessionsWithPurchases()))
+                .sessionsWithSearchesDiff(
+                        percentDifference(summaryA.getSessionsWithSearches(), summaryB.getSessionsWithSearches()))
+
+                // Cart and purchase amounts
+                .addToCartAmountDiff(
+                        percentDifference(summaryA.getTotalAddToCartAmount(), summaryB.getTotalAddToCartAmount()))
+                .purchaseValueEurDiff(
+                        percentDifference(summaryA.getTotalPurchaseValueEur(), summaryB.getTotalPurchaseValueEur()))
+
+                // Query complexity
+                .averageWordsPerQueryDiff(
+                        absoluteDifference(summaryA.getAverageWordsPerQuery(), summaryB.getAverageWordsPerQuery()))
+                .longQueryCountDiff(percentDifference(summaryA.getLongQueryCount(), summaryB.getLongQueryCount()))
+                .longQueryPercentageDiff(
+                        absoluteDifference(summaryA.getLongQueryPercentage(), summaryB.getLongQueryPercentage()))
+
+                // Winners
+                .conversionWinner(determineWinner(summaryA.getConversionRate(), summaryB.getConversionRate()))
+                .revenueWinner(determineWinner(summaryA.getTotalRevenue(), summaryB.getTotalRevenue()))
+                .clickThroughWinner(determineWinner(summaryA.getClickThroughRate(), summaryB.getClickThroughRate()))
+                .build();
+
+        return com.talya.searchanalytics.web.dto.ABTestComparisonResponse.builder()
+                .groupA(summaryA)
+                .groupALabel(getGroupLabel(groupA))
+                .groupB(summaryB)
+                .groupBLabel(getGroupLabel(groupB))
+                .comparison(comparison)
+                .build();
+    }
+
+    // Helper: Get descriptive label for search group
+    private String getGroupLabel(Integer group) {
+        if (group == null)
+            return "All";
+        if (group == 0)
+            return "Shopify Search";
+        if (group == 1)
+            return "AI Search";
+        return "Group " + group;
+    }
+
+    // Helper: Calculate percentage difference (B vs A)
+    private Double percentDifference(Number a, Number b) {
+        if (a == null || b == null)
+            return 0.0;
+        double valA = a.doubleValue();
+        double valB = b.doubleValue();
+        if (valA == 0 && valB == 0)
+            return 0.0;
+        if (valA == 0)
+            return 100.0;
+        return Math.round(((valB - valA) / valA) * 1000.0) / 10.0;
+    }
+
+    // Helper: Calculate absolute difference (B - A) for rates
+    private Double absoluteDifference(Number a, Number b) {
+        if (a == null || b == null)
+            return 0.0;
+        double diff = b.doubleValue() - a.doubleValue();
+        return Math.round(diff * 10.0) / 10.0;
+    }
+
+    // Helper: Determine winner
+    private String determineWinner(Number a, Number b) {
+        if (a == null || b == null)
+            return "TIE";
+        double valA = a.doubleValue();
+        double valB = b.doubleValue();
+        double diff = Math.abs(valB - valA);
+        if (diff < 0.1)
+            return "TIE"; // Less than 0.1% difference is a tie
+        return valB > valA ? "B" : "A";
+    }
+
     // Helper class to hold period analytics data
     private static class PeriodAnalytics {
         long validPurchasedProductCount = 0;
@@ -151,29 +281,34 @@ public class AnalyticsService {
         java.util.Set<String> sessionsWithAddToCarts = new java.util.HashSet<>();
         long totalWordCount = 0;
         long queryCount = 0;
-        long longQueryCount = 0; // Queries with 4+ words
+        long longQueryCount = 0; // Queries with 3+ words
     }
 
     private PeriodAnalytics calculatePeriodAnalytics(String shopId, long fromMs, long toMs,
-            Map<String, Double> conversionRatesUsed) {
-        return calculatePeriodAnalytics(shopId, fromMs, toMs, conversionRatesUsed, true);
+            Map<String, Double> conversionRatesUsed, Integer searchGroup) {
+        return calculatePeriodAnalytics(shopId, fromMs, toMs, conversionRatesUsed, true, searchGroup);
     }
 
     private PeriodAnalytics calculatePeriodAnalytics(String shopId, long fromMs, long toMs,
-            Map<String, Double> conversionRatesUsed, boolean enableLogging) {
+            Map<String, Double> conversionRatesUsed, boolean enableLogging, Integer searchGroup) {
         PeriodAnalytics analytics = new PeriodAnalytics();
 
-        // Get all events for this period
-        List<com.talya.searchanalytics.model.SearchEvent> searchEvents = searchRepo
-                .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-        List<com.talya.searchanalytics.model.AddToCartEvent> cartEvents = cartRepo
-                .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-        List<com.talya.searchanalytics.model.ProductClickEvent> clickEvents = clickRepo
-                .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-        List<com.talya.searchanalytics.model.BuyNowClickEvent> buyNowEvents = buyNowRepo
-                .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
-        List<com.talya.searchanalytics.model.PurchaseEvent> purchaseEvents = purchaseRepo
-                .findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
+        // Get all events for this period (filtered by searchGroup if provided)
+        List<com.talya.searchanalytics.model.SearchEvent> searchEvents = searchGroup != null
+                ? searchRepo.findAllByShopIdAndTimestampMsBetweenAndSearchGroup(shopId, fromMs, toMs, searchGroup)
+                : searchRepo.findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
+        List<com.talya.searchanalytics.model.AddToCartEvent> cartEvents = searchGroup != null
+                ? cartRepo.findAllByShopIdAndTimestampMsBetweenAndSearchGroup(shopId, fromMs, toMs, searchGroup)
+                : cartRepo.findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
+        List<com.talya.searchanalytics.model.ProductClickEvent> clickEvents = searchGroup != null
+                ? clickRepo.findAllByShopIdAndTimestampMsBetweenAndSearchGroup(shopId, fromMs, toMs, searchGroup)
+                : clickRepo.findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
+        List<com.talya.searchanalytics.model.BuyNowClickEvent> buyNowEvents = searchGroup != null
+                ? buyNowRepo.findAllByShopIdAndTimestampMsBetweenAndSearchGroup(shopId, fromMs, toMs, searchGroup)
+                : buyNowRepo.findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
+        List<com.talya.searchanalytics.model.PurchaseEvent> purchaseEvents = searchGroup != null
+                ? purchaseRepo.findAllByShopIdAndTimestampMsBetweenAndSearchGroup(shopId, fromMs, toMs, searchGroup)
+                : purchaseRepo.findAllByShopIdAndTimestampMsBetween(shopId, fromMs, toMs);
 
         // Build session products map and calculate word counts
         java.util.Map<String, java.util.Set<String>> sessionProducts = new java.util.HashMap<>();
@@ -189,8 +324,8 @@ public class AnalyticsService {
                 int wordCount = words.length;
                 analytics.totalWordCount += wordCount;
                 analytics.queryCount++;
-                // Track queries with 4+ words
-                if (wordCount >= 4) {
+                // Track queries with 3+ words
+                if (wordCount >= 3) {
                     analytics.longQueryCount++;
                 }
             }
@@ -340,7 +475,7 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsSummaryResponse.TimePoint> generateTimeSeries(String shopId, long fromMs, long toMs,
-            String currency) {
+            String currency, Integer searchGroup) {
         List<AnalyticsSummaryResponse.TimePoint> series = new ArrayList<>();
         LocalDate start = Instant.ofEpochMilli(fromMs).atZone(ZoneOffset.UTC).toLocalDate();
         LocalDate end = Instant.ofEpochMilli(toMs).atZone(ZoneOffset.UTC).toLocalDate();
@@ -351,11 +486,11 @@ public class AnalyticsService {
 
             Map<String, Double> dayConversionRates = new HashMap<>();
             PeriodAnalytics dayAnalytics = calculatePeriodAnalytics(shopId, dayStartMs, dayEndMs, dayConversionRates,
-                    false);
+                    false, searchGroup);
 
             series.add(AnalyticsSummaryResponse.TimePoint.builder()
                     .date(d.toString())
-                    .searches((int) searchRepo.countByShopIdAndTimestampMsBetween(shopId, dayStartMs, dayEndMs))
+                    .searches((int) countSearches(shopId, dayStartMs, dayEndMs, searchGroup))
                     .addToCart((int) dayAnalytics.addToCartCount)
                     .purchases((int) dayAnalytics.validPurchasedProductCount)
                     .addToCartAmount(dayAnalytics.addToCartAmount)

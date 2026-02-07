@@ -49,6 +49,10 @@ public class PurchaseEvent {
     @Column
     private String orderStatus;
 
+    /** A/B test search group: 0 = Shopify search, 1 = AI search */
+    @Column
+    private Integer searchGroup;
+
     /** Unix timestamp (ms) of purchase detection */
     @Column(nullable = false)
     private Long timestampMs;

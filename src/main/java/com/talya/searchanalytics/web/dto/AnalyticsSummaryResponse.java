@@ -53,8 +53,8 @@ public class AnalyticsSummaryResponse {
     // Query complexity metrics
     private Double averageWordsPerQuery;
     private Double averageWordsPerQueryChangePercent;
-    private Long longQueryCount; // Queries with 4+ words
-    private Double longQueryPercentage; // Percentage of queries with 4+ words
+    private Long longQueryCount; // Queries with 3+ words
+    private Double longQueryPercentage; // Percentage of queries with 3+ words
     private Double longQueryCountChangePercent;
     private Double longQueryPercentageChangePercent;
 

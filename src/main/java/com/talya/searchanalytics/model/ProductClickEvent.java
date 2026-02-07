@@ -41,6 +41,10 @@ public class ProductClickEvent {
     @Column
     private String url;
 
+    /** A/B test search group: 0 = Shopify search, 1 = AI search */
+    @Column
+    private Integer searchGroup;
+
     @Column(nullable = false)
     private Long timestampMs;
 }

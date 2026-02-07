@@ -32,6 +32,10 @@ public class AddToCartEvent {
     @Column
     private String searchId;
 
+    /** A/B test search group: 0 = Shopify search, 1 = AI search */
+    @Column
+    private Integer searchGroup;
+
     @Column(nullable = false)
     private Long timestampMs;
 

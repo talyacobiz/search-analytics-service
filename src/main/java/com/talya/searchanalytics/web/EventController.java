@@ -33,6 +33,7 @@ public class EventController {
                 .sessionId(req.getSessionId())
                 .query(req.getQuery())
                 .productIds(req.getProductIds())
+                .searchGroup(req.getSearchGroup())
                 .timestampMs(req.getTimestampMs())
                 .build();
         return ResponseEntity.ok(searchRepo.save(e).getId());
@@ -54,26 +55,31 @@ public class EventController {
                 currency = parts[1];
             }
         }
-        // Smart add-to-cart logic
-        List<SearchEvent> searches = searchRepo.findAllByShopIdAndSessionId(req.getShopId(), req.getSessionId());
-        log.info("🛒 Add-to-cart validation: sessionId={}, productId={}, found {} search events",
-                req.getSessionId(), req.getProductId(), searches.size());
+        // Smart add-to-cart logic - validate product is in search results from the SAME
+        // search group
+        List<SearchEvent> searches = searchRepo.findAllByShopIdAndSessionIdAndSearchGroup(
+                req.getShopId(), req.getSessionId(), req.getSearchGroup());
+        log.info("🛒 Add-to-cart validation: sessionId={}, productId={}, searchGroup={}, found {} search events",
+                req.getSessionId(), req.getProductId(), req.getSearchGroup(), searches.size());
 
         boolean found = false;
         for (SearchEvent search : searches) {
+
             if (search.getProductIds() != null) {
-                log.debug("Search {} has {} products: {}", search.getSearchId(),
-                        search.getProductIds().size(), search.getProductIds());
+                log.debug("Search {} (group {}) has {} products: {}", search.getSearchId(),
+                        search.getSearchGroup(), search.getProductIds().size(), search.getProductIds());
                 if (search.getProductIds().contains(req.getProductId())) {
                     found = true;
+                    log.info("✅ Product {} found in search {} (group {})",
+                            req.getProductId(), search.getSearchId(), search.getSearchGroup());
                     break;
                 }
             }
         }
         if (!found) {
             log.warn(
-                    "AddToCartEvent REJECTED: productId {} not found in any search results for session {}. Searched {} events.",
-                    req.getProductId(), req.getSessionId(), searches.size());
+                    "AddToCartEvent REJECTED: productId {} not found in search results for group {} in session {}. Searched {} events.",
+                    req.getProductId(), req.getSearchGroup(), req.getSessionId(), searches.size());
             return ResponseEntity.noContent().build();
         }
         log.info("AddToCartEvent ACCEPTED: productId {} found in search results", req.getProductId());
@@ -83,6 +89,7 @@ public class EventController {
                 .sessionId(req.getSessionId())
                 .productId(req.getProductId())
                 .searchId(req.getSearchId())
+                .searchGroup(req.getSearchGroup())
                 .timestampMs(req.getTimestampMs())
                 .price(price)
                 .currency(currency)
@@ -95,10 +102,25 @@ public class EventController {
         try {
             // --- Extract raw Shopify info ---
             String shopId = (String) orderData.get("shopId");
-            log.info("Received Shopify order from: {}", shopId);
+            log.info("📦 Received Shopify order from: {}", shopId);
+            log.info("📋 Raw order data: {}", orderData);
 
             String searchaiUserId = (String) orderData.get("searchai_user_id");
             String searchaiSessionId = (String) orderData.get("searchai_session_id");
+            Integer searchaiSearchGroup = null;
+
+            // Extract search group (0 or 1)
+            Object searchGroupObj = orderData.get("searchai_search_group");
+            if (searchGroupObj instanceof Number) {
+                searchaiSearchGroup = ((Number) searchGroupObj).intValue();
+            } else if (searchGroupObj instanceof String) {
+                try {
+                    searchaiSearchGroup = Integer.parseInt((String) searchGroupObj);
+                } catch (NumberFormatException e) {
+                    log.warn("Failed to parse searchai_search_group: {}", searchGroupObj);
+                }
+            }
+
             String currency = (String) orderData.get("currency");
             Object timeObj = orderData.get("time");
             Long timestampMs = timeObj instanceof Number ? ((Number) timeObj).longValue() : System.currentTimeMillis();
@@ -117,7 +139,7 @@ public class EventController {
                     String name = (String) p.get("name");
                     double price = Double.parseDouble(p.get("price").toString());
                     int amount = Integer.parseInt(p.get("amount").toString());
-                    
+
                     products_list.add(new Product(productId, name, price, amount));
                     totalAmount += price * amount;
                 }
@@ -128,6 +150,7 @@ public class EventController {
                     .shopId(shopId)
                     .clientId(searchaiUserId)
                     .sessionId(searchaiSessionId)
+                    .searchGroup(searchaiSearchGroup)
                     .products(products_list)
                     .totalAmount(totalAmount)
                     .currency(currency)
@@ -136,7 +159,10 @@ public class EventController {
                     .build();
 
             purchaseRepo.save(purchase);
-            log.info("✅ Saved purchase event for order with {} products", products_list.size());
+            log.info("✅ Saved purchase event for order with {} products, A/B Group: {} ({})",
+                    products_list.size(),
+                    searchaiSearchGroup,
+                    searchaiSearchGroup != null && searchaiSearchGroup == 1 ? "AI Search" : "Shopify Search");
 
             return ResponseEntity.ok().build();
 
@@ -155,6 +181,7 @@ public class EventController {
                 .sessionId(req.getSessionId())
                 .productId(req.getProductId())
                 .searchId(req.getSearchId())
+                .searchGroup(req.getSearchGroup())
                 .timestampMs(req.getTimestampMs())
                 .build();
         return ResponseEntity.ok(clickRepo.save(e).getId());
@@ -168,6 +195,7 @@ public class EventController {
                 .clientId(req.getClientId())
                 .sessionId(req.getSessionId())
                 .productId(req.getProductId())
+                .searchGroup(req.getSearchGroup())
                 .timestampMs(req.getTimestampMs())
                 .build();
         return ResponseEntity.ok(buyNowRepo.save(e).getId());

@@ -37,6 +37,10 @@ public class SearchEvent {
     @Column(name = "productId")
     private java.util.List<String> productIds;
 
+    /** A/B test search group: 0 = Shopify search, 1 = AI search */
+    @Column
+    private Integer searchGroup;
+
     @Column(nullable = false)
     private Long timestampMs;
 }

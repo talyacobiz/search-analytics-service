@@ -6,5 +6,12 @@ import java.util.List;
 
 public interface ProductClickEventRepository extends JpaRepository<ProductClickEvent, Long> {
     long countByShopIdAndTimestampMsBetween(String shopId, Long from, Long to);
+
     List<ProductClickEvent> findAllByShopIdAndTimestampMsBetween(String shopId, Long from, Long to);
+
+    // A/B Testing: Filter by searchGroup (ignores null searchGroup)
+    long countByShopIdAndTimestampMsBetweenAndSearchGroup(String shopId, Long from, Long to, Integer searchGroup);
+
+    List<ProductClickEvent> findAllByShopIdAndTimestampMsBetweenAndSearchGroup(String shopId, Long from, Long to,
+            Integer searchGroup);
 }

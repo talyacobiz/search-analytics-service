@@ -16,6 +16,7 @@ public class EventDTOs {
         private String sessionId;
         private String query;
         private List<String> productIds;
+        private Integer searchGroup;
         private Long timestampMs;
     }
 
@@ -29,6 +30,7 @@ public class EventDTOs {
         private String sessionId;
         private String productId;
         private String searchId;
+        private Integer searchGroup;
         private Long timestampMs;
         private String price; // changed from Double to String
         private String currency; // new field for currency as text
@@ -45,6 +47,7 @@ public class EventDTOs {
         private List<String> productIds;
         private Double totalAmount;
         private String currency;
+        private Integer searchGroup;
         private Long timestampMs;
     }
 
@@ -58,6 +61,7 @@ public class EventDTOs {
         private String sessionId;
         private String productId;
         private String searchId;
+        private Integer searchGroup;
         private Long timestampMs;
     }
 
@@ -70,6 +74,7 @@ public class EventDTOs {
         private String clientId;
         private String sessionId;
         private String productId;
+        private Integer searchGroup;
         private Long timestampMs;
     }
 }
